@@ -1,0 +1,4 @@
+/* At the top of App.css */
+* {
+    border: 5px solid red !important;
+}
