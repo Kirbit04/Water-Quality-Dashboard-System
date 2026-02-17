@@ -1,7 +1,6 @@
-'use client';
-
 import { useState } from 'react';
 import Navigation from './Navigation';
+import { contactAPI } from '../api';
 
 export default function Contact({ onNavigate }) {
   const [formData, setFormData] = useState({
@@ -10,6 +9,43 @@ export default function Contact({ onNavigate }) {
     message: '',
   });
   const [submitted, setSubmitted] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const validateEmail = (email) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
+  const validateField = (name, value) => {
+    const errors = {};
+    
+    if (name === 'name' || name === 'all') {
+      if (!formData.name && name === 'all') {
+        errors.name = 'Name is required';
+      } else if (formData.name && formData.name.trim().length < 2) {
+        errors.name = 'Name must be at least 2 characters';
+      }
+    }
+    
+    if (name === 'email' || name === 'all') {
+      if (!formData.email && name === 'all') {
+        errors.email = 'Email is required';
+      } else if (formData.email && !validateEmail(formData.email)) {
+        errors.email = 'Please enter a valid email address';
+      }
+    }
+    
+    if (name === 'message' || name === 'all') {
+      if (!formData.message && name === 'all') {
+        errors.message = 'Message is required';
+      } else if (formData.message && formData.message.trim().length < 10) {
+        errors.message = 'Message must be at least 10 characters';
+      }
+    }
+    
+    return errors;
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -17,133 +53,163 @@ export default function Contact({ onNavigate }) {
       ...prev,
       [name]: value,
     }));
+    
+    const newErrors = { ...fieldErrors };
+    const fieldValidation = validateField(name, value);
+    if (fieldValidation[name]) {
+      newErrors[name] = fieldValidation[name];
+    } else {
+      delete newErrors[name];
+    }
+    setFieldErrors(newErrors);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (formData.name && formData.email && formData.message) {
+    setError('');
+    
+    const validationErrors = validateField('all');
+    setFieldErrors(validationErrors);
+
+    if (Object.keys(validationErrors).length > 0) {
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await contactAPI.submitMessage({
+        name: formData.name,
+        email: formData.email,
+        message: formData.message,
+      });
+
       setSubmitted(true);
       setFormData({ name: '', email: '', message: '' });
+      setFieldErrors({});
       setTimeout(() => setSubmitted(false), 3000);
+    } catch (err) {
+      setError(err.message || 'Failed to send message. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div style={{ minHeight: '100vh', backgroundColor: '#f5f7fa' }}>
       <Navigation currentPage="contact" onNavigate={onNavigate} />
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <h1 className="text-4xl font-bold text-blue-600 text-center mb-12">
+      <main className="contact-container">
+        <h1 className="contact-title">
           Get in Touch with AquaGuard
         </h1>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+        <div className="contact-content">
           {/* Our Details */}
-          <div className="bg-white rounded-lg shadow-sm p-8 border border-gray-200">
-            <h2 className="text-2xl font-bold text-gray-900 mb-8">Our Details</h2>
+          <div>
+            <h2 className="contact-section-title">Our Details</h2>
 
-            <div className="space-y-8">
+            <ul className="contact-info">
               {/* General Inquiries */}
-              <div>
-                <div className="flex items-center mb-2">
-                  <span className="text-blue-600 text-xl mr-3">📞</span>
-                  <h3 className="font-bold text-gray-900">General Inquiries</h3>
-                </div>
-                <p className="text-blue-600 font-semibold ml-8">+254 (0)20 123-4567</p>
-                <p className="text-blue-600 ml-8">Toll Free</p>
-              </div>
+              <li className="contact-item">
+                <span className="contact-label">General Inquiries</span>
+                <p className="contact-value">+254 (0)20 123-4567</p>
+                <div className="contact-label" style={{ marginTop: '4px' }}>Toll Free</div>
+              </li>
 
               {/* Support Line */}
-              <div>
-                <div className="flex items-center mb-2">
-                  <span className="text-blue-600 text-xl mr-3">☎️</span>
-                  <h3 className="font-bold text-gray-900">Support Line</h3>
-                </div>
-                <p className="text-blue-600 font-semibold ml-8">+254 (0)20 987-6543</p>
-              </div>
+              <li className="contact-item">
+                <span className="contact-label">Support Line</span>
+                <p className="contact-value">+254 (0)20 987-6543</p>
+              </li>
 
               {/* General Email */}
-              <div>
-                <div className="flex items-center mb-2">
-                  <span className="text-blue-600 text-xl mr-3">✉️</span>
-                  <h3 className="font-bold text-gray-900">General Email</h3>
-                </div>
-                <p className="text-blue-600 font-semibold ml-8">info@aquaguard.com</p>
-              </div>
+              <li className="contact-item">
+                <span className="contact-label">General Email</span>
+                <p className="contact-value">info@aquaguard.com</p>
+              </li>
 
               {/* Support Email */}
-              <div>
-                <div className="flex items-center mb-2">
-                  <span className="text-blue-600 text-xl mr-3">📧</span>
-                  <h3 className="font-bold text-gray-900">Support Email</h3>
-                </div>
-                <p className="text-blue-600 font-semibold ml-8">support@aquaguard.com</p>
-              </div>
-            </div>
+              <li className="contact-item">
+                <span className="contact-label">Support Email</span>
+                <p className="contact-value">support@aquaguard.com</p>
+              </li>
+            </ul>
           </div>
 
           {/* Send Us a Message */}
-          <div className="bg-white rounded-lg shadow-sm p-8 border border-gray-200">
-            <h2 className="text-2xl font-bold text-gray-900 mb-8">Send Us a Message</h2>
+          <div>
+            <h2 className="contact-section-title">Send Us a Message</h2>
 
             {submitted && (
-              <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded mb-6">
+              <div style={{ backgroundColor: '#e6f7ed', borderRadius: '8px', color: '#00c853', padding: '12px', marginBottom: '16px', fontSize: '14px' }}>
                 Thank you! Your message has been sent successfully.
               </div>
             )}
+            {error && (
+              <div style={{ backgroundColor: '#ffe6e6', borderRadius: '8px', color: '#ff3333', padding: '12px', marginBottom: '16px', fontSize: '14px' }}>
+                {error}
+              </div>
+            )}
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+            <form onSubmit={handleSubmit} className="contact-form">
+              <div className="contact-form-group">
+                <label className="contact-form-label">Name</label>
                 <input
                   type="text"
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
                   placeholder="Your Name"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="contact-form-input"
+                  style={{ borderColor: fieldErrors.name ? '#ff3333' : 'var(--input-border)' }}
                 />
+                {fieldErrors.name && <div className="error-message">{fieldErrors.name}</div>}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+              <div className="contact-form-group">
+                <label className="contact-form-label">Email</label>
                 <input
                   type="email"
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
                   placeholder="your@email.com"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="contact-form-input"
+                  style={{ borderColor: fieldErrors.email ? '#ff3333' : 'var(--input-border)' }}
                 />
+                {fieldErrors.email && <div className="error-message">{fieldErrors.email}</div>}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Message</label>
+              <div className="contact-form-group">
+                <label className="contact-form-label">Message</label>
                 <textarea
                   name="message"
                   value={formData.message}
                   onChange={handleChange}
                   placeholder="Your message here..."
                   rows="5"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  className="contact-form-textarea"
+                  style={{ borderColor: fieldErrors.message ? '#ff3333' : 'var(--input-border)' }}
                 ></textarea>
+                {fieldErrors.message && <div className="error-message">{fieldErrors.message}</div>}
               </div>
 
               <button
                 type="submit"
-                className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 rounded-full transition"
+                className="contact-form-button"
+                disabled={loading}
+                style={{ opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
               >
-                Send Message
+                {loading ? 'Sending...' : 'Send Message'}
               </button>
             </form>
           </div>
         </div>
       </main>
 
-      <footer className="bg-white border-t border-gray-200 mt-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 text-center text-gray-600 text-sm">
-          © 2026 AquaGuard. All rights reserved.
-        </div>
+      <footer className="footer">
+        © 2026 AquaGuard. All rights reserved.
       </footer>
     </div>
   );

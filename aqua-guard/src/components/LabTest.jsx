@@ -1,7 +1,6 @@
-'use client';
-
 import { useState } from 'react';
 import Navigation from './Navigation';
+import { labTestAPI } from '../api';
 
 export default function LabTest({ user, onNavigate }) {
   const [formData, setFormData] = useState({
@@ -15,6 +14,60 @@ export default function LabTest({ user, onNavigate }) {
     nitrates: '',
     phosphates: '',
   });
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [submitMessage, setSubmitMessage] = useState('');
+
+  const validateField = (name, value) => {
+    const errors = {};
+    const val = formData[name] !== undefined ? formData[name] : value;
+    
+    if ((name === 'occupation' || name === 'all') && !formData.occupation && name === 'all') {
+      errors.occupation = 'Occupation is required';
+    }
+    
+    if ((name === 'location' || name === 'all') && !formData.location && name === 'all') {
+      errors.location = 'Location is required';
+    }
+    
+    if ((name === 'ph' || name === 'all') && !formData.ph && name === 'all') {
+      errors.ph = 'pH level is required';
+    } else if (formData.ph && (isNaN(formData.ph) || formData.ph < 0 || formData.ph > 14)) {
+      errors.ph = 'pH must be between 0 and 14';
+    }
+    
+    if ((name === 'turbidity' || name === 'all') && !formData.turbidity && name === 'all') {
+      errors.turbidity = 'Turbidity is required';
+    } else if (formData.turbidity && (isNaN(formData.turbidity) || formData.turbidity < 0)) {
+      errors.turbidity = 'Turbidity must be a positive number';
+    }
+    
+    if ((name === 'salinity' || name === 'all') && !formData.salinity && name === 'all') {
+      errors.salinity = 'Salinity is required';
+    } else if (formData.salinity && (isNaN(formData.salinity) || formData.salinity < 0)) {
+      errors.salinity = 'Salinity must be a positive number';
+    }
+    
+    if ((name === 'dissolvedOxygen' || name === 'all') && !formData.dissolvedOxygen && name === 'all') {
+      errors.dissolvedOxygen = 'Dissolved oxygen is required';
+    } else if (formData.dissolvedOxygen && (isNaN(formData.dissolvedOxygen) || formData.dissolvedOxygen < 0)) {
+      errors.dissolvedOxygen = 'Dissolved oxygen must be a positive number';
+    }
+    
+    if ((name === 'nitrates' || name === 'all') && !formData.nitrates && name === 'all') {
+      errors.nitrates = 'Nitrates is required';
+    } else if (formData.nitrates && (isNaN(formData.nitrates) || formData.nitrates < 0)) {
+      errors.nitrates = 'Nitrates must be a positive number';
+    }
+    
+    if ((name === 'phosphates' || name === 'all') && !formData.phosphates && name === 'all') {
+      errors.phosphates = 'Phosphates is required';
+    } else if (formData.phosphates && (isNaN(formData.phosphates) || formData.phosphates < 0)) {
+      errors.phosphates = 'Phosphates must be a positive number';
+    }
+    
+    return errors;
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -22,82 +75,129 @@ export default function LabTest({ user, onNavigate }) {
       ...prev,
       [name]: value,
     }));
+    
+    const newErrors = { ...fieldErrors };
+    const fieldValidation = validateField(name, value);
+    if (fieldValidation[name]) {
+      newErrors[name] = fieldValidation[name];
+    } else {
+      delete newErrors[name];
+    }
+    setFieldErrors(newErrors);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    alert('Lab test saved successfully! This is a demo - data is stored in localStorage.');
-    const tests = JSON.parse(localStorage.getItem('labTests') || '[]');
-    tests.push({ ...formData, timestamp: new Date().toISOString() });
-    localStorage.setItem('labTests', JSON.stringify(tests));
-    setFormData({
-      occupation: '',
-      location: '',
-      dateOfTest: '2026-01-17',
-      ph: '',
-      turbidity: '',
-      salinity: '',
-      dissolvedOxygen: '',
-      nitrates: '',
-      phosphates: '',
-    });
+    setSubmitMessage('');
+    
+    const validationErrors = validateField('all');
+    setFieldErrors(validationErrors);
+
+    if (Object.keys(validationErrors).length > 0) {
+      setSubmitMessage('Please fix the errors below before submitting');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await labTestAPI.submit({
+        ...formData,
+        userId: user?.id,
+      });
+
+      setSubmitMessage('Lab test submitted successfully!');
+      setFormData({
+        occupation: '',
+        location: '',
+        dateOfTest: '2026-01-17',
+        ph: '',
+        turbidity: '',
+        salinity: '',
+        dissolvedOxygen: '',
+        nitrates: '',
+        phosphates: '',
+      });
+      setFieldErrors({});
+      
+      setTimeout(() => {
+        setSubmitMessage('');
+      }, 3000);
+    } catch (err) {
+      setSubmitMessage(`Error: ${err.message || 'Failed to submit lab test'}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div style={{ minHeight: '100vh', backgroundColor: '#f5f7fa' }}>
       <Navigation currentPage="labtest" onNavigate={onNavigate} />
 
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="bg-white rounded-lg shadow-sm p-8 border border-gray-200">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Lab Test Manual Input</h1>
-          <p className="text-gray-600 mb-8">
+      <main className="lab-test-container">
+        <div className="lab-test-form">
+          <h1 className="auth-title" style={{ fontSize: '28px', marginBottom: '8px' }}>Lab Test Manual Input</h1>
+          <p className="auth-subtitle" style={{ marginBottom: '32px', textAlign: 'left' }}>
             Manually enter your water quality parameters below to save and analyze results.
           </p>
 
-          <form onSubmit={handleSubmit} className="space-y-8">
+          <form onSubmit={handleSubmit}>
             {/* General Information */}
             <div>
-              <h2 className="text-xl font-bold text-gray-900 mb-6">General Information</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Occupation</label>
-                  <input
-                    type="text"
+              <h2 className="form-section-title">General Information</h2>
+              <div className="form-grid-2">
+                <div className="form-group">
+                  <label className="form-label">Occupation</label>
+                  <select
                     name="occupation"
                     value={formData.occupation}
                     onChange={handleChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                    className="form-select"
+                    style={{ borderColor: fieldErrors.occupation ? '#ff3333' : 'var(--input-border)' }}
+                  >
+                    <option value="">Select Occupation</option>
+                    <option value="Water Supplier">Water Supplier</option>
+                    <option value="Farmer">Farmer</option>
+                    <option value="Livestock Farmer">Livestock Farmer</option>
+                    <option value="Local">Local</option>
+                  </select>
+                  {fieldErrors.occupation && <div className="error-message">{fieldErrors.occupation}</div>}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
-                  <input
-                    type="text"
+                <div className="form-group">
+                  <label className="form-label">Location</label>
+                  <select
                     name="location"
                     value={formData.location}
                     onChange={handleChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                    className="form-select"
+                    style={{ borderColor: fieldErrors.location ? '#ff3333' : 'var(--input-border)' }}
+                  >
+                    <option value="">Select Location</option>
+                    <option value="Ng'ong">Ng'ong</option>
+                    <option value="Ongata Rongai">Ongata Rongai</option>
+                    <option value="Rimpa">Rimpa</option>
+                  </select>
+                  {fieldErrors.location && <div className="error-message">{fieldErrors.location}</div>}
                 </div>
               </div>
-              <div className="mt-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Date of Test</label>
+              <div className="form-group">
+                <label className="form-label">Date of Test</label>
                 <input
                   type="date"
                   name="dateOfTest"
                   value={formData.dateOfTest}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="form-input"
                 />
               </div>
             </div>
 
             {/* Water Quality Parameters */}
             <div>
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Water Quality Parameters</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">pH</label>
+              <h2 className="form-section-title">Water Quality Parameters</h2>
+              <div className="form-grid-3">
+                <div className="form-group">
+                  <label className="form-label">pH</label>
                   <input
                     type="number"
                     name="ph"
@@ -105,11 +205,13 @@ export default function LabTest({ user, onNavigate }) {
                     onChange={handleChange}
                     step="0.1"
                     placeholder="7.2"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="form-input"
+                    style={{ borderColor: fieldErrors.ph ? '#ff3333' : 'var(--input-border)' }}
                   />
+                  {fieldErrors.ph && <div className="error-message">{fieldErrors.ph}</div>}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Turbidity</label>
+                <div className="form-group">
+                  <label className="form-label">Turbidity</label>
                   <input
                     type="number"
                     name="turbidity"
@@ -117,29 +219,33 @@ export default function LabTest({ user, onNavigate }) {
                     onChange={handleChange}
                     step="0.1"
                     placeholder="0.8"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="form-input"
+                    style={{ borderColor: fieldErrors.turbidity ? '#ff3333' : 'var(--input-border)' }}
                   />
+                  {fieldErrors.turbidity && <div className="error-message">{fieldErrors.turbidity}</div>}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Salinity</label>
-                  <div className="flex gap-2">
+                <div className="form-group">
+                  <label className="form-label">Salinity</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
                     <input
                       type="number"
                       name="salinity"
                       value={formData.salinity}
                       onChange={handleChange}
                       placeholder="250"
-                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="form-input"
+                      style={{ flex: 1, borderColor: fieldErrors.salinity ? '#ff3333' : 'var(--input-border)' }}
                     />
-                    <div className="flex items-center text-gray-600 text-sm">ppm</div>
+                    <div style={{ display: 'flex', alignItems: 'center', fontSize: '13px', color: '#666666' }}>ppm</div>
                   </div>
+                  {fieldErrors.salinity && <div className="error-message">{fieldErrors.salinity}</div>}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Dissolved Oxygen</label>
-                  <div className="flex gap-2">
+              <div className="form-grid-3">
+                <div className="form-group">
+                  <label className="form-label">Dissolved Oxygen</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
                     <input
                       type="number"
                       name="dissolvedOxygen"
@@ -147,14 +253,16 @@ export default function LabTest({ user, onNavigate }) {
                       onChange={handleChange}
                       step="0.1"
                       placeholder="8.5"
-                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="form-input"
+                      style={{ flex: 1, borderColor: fieldErrors.dissolvedOxygen ? '#ff3333' : 'var(--input-border)' }}
                     />
-                    <div className="flex items-center text-gray-600 text-sm">mg/L</div>
+                    <div style={{ display: 'flex', alignItems: 'center', fontSize: '13px', color: '#666666' }}>mg/L</div>
                   </div>
+                  {fieldErrors.dissolvedOxygen && <div className="error-message">{fieldErrors.dissolvedOxygen}</div>}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Nitrates</label>
-                  <div className="flex gap-2">
+                <div className="form-group">
+                  <label className="form-label">Nitrates</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
                     <input
                       type="number"
                       name="nitrates"
@@ -162,14 +270,16 @@ export default function LabTest({ user, onNavigate }) {
                       onChange={handleChange}
                       step="0.1"
                       placeholder="1.5"
-                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="form-input"
+                      style={{ flex: 1, borderColor: fieldErrors.nitrates ? '#ff3333' : 'var(--input-border)' }}
                     />
-                    <div className="flex items-center text-gray-600 text-sm">mg/L</div>
+                    <div style={{ display: 'flex', alignItems: 'center', fontSize: '13px', color: '#666666' }}>mg/L</div>
                   </div>
+                  {fieldErrors.nitrates && <div className="error-message">{fieldErrors.nitrates}</div>}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Phosphates</label>
-                  <div className="flex gap-2">
+                <div className="form-group">
+                  <label className="form-label">Phosphates</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
                     <input
                       type="number"
                       name="phosphates"
@@ -177,34 +287,36 @@ export default function LabTest({ user, onNavigate }) {
                       onChange={handleChange}
                       step="0.01"
                       placeholder="0.02"
-                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="form-input"
+                      style={{ flex: 1, borderColor: fieldErrors.phosphates ? '#ff3333' : 'var(--input-border)' }}
                     />
-                    <div className="flex items-center text-gray-600 text-sm">mg/L</div>
+                    <div style={{ display: 'flex', alignItems: 'center', fontSize: '13px', color: '#666666' }}>mg/L</div>
                   </div>
+                  {fieldErrors.phosphates && <div className="error-message">{fieldErrors.phosphates}</div>}
                 </div>
               </div>
             </div>
 
             {/* Recommendations */}
             <div>
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Recommendations</h2>
-              <p className="text-gray-600 bg-gray-50 p-4 rounded-lg">
+              <h2 className="form-section-title">Recommendations</h2>
+              <p className="form-section-description" style={{ backgroundColor: '#f0f4f8', padding: '16px', margin: '0' }}>
                 Based on the entered data, regular monitoring is advised. Adjustments may be
                 necessary if parameters show consistent deviations from optimal levels.
               </p>
             </div>
 
             {/* Buttons */}
-            <div className="flex gap-4 justify-end">
+            <div className="form-actions">
               <button
                 type="button"
-                className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 font-semibold hover:bg-gray-50 transition"
+                className="btn btn-secondary"
               >
                 Upload Test
               </button>
               <button
                 type="submit"
-                className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg transition"
+                className="btn btn-primary"
               >
                 Save/Test Submit
               </button>
@@ -213,10 +325,8 @@ export default function LabTest({ user, onNavigate }) {
         </div>
       </main>
 
-      <footer className="bg-white border-t border-gray-200 mt-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 text-center text-gray-600 text-sm">
-          © 2026 AquaGuard. All rights reserved.
-        </div>
+      <footer className="footer">
+        © 2026 AquaGuard. All rights reserved.
       </footer>
     </div>
   );

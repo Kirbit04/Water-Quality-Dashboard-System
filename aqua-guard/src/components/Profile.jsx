@@ -1,8 +1,31 @@
-'use client';
-
+import { useState, useEffect } from 'react';
 import Navigation from './Navigation';
+import { userAPI } from '../api';
 
 export default function Profile({ user, onLogout, onNavigate }) {
+  const [profileData, setProfileData] = useState(user);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetchUserProfile();
+  }, [user?.id]);
+
+  const fetchUserProfile = async () => {
+    if (!user?.id) return;
+
+    setLoading(true);
+    try {
+      const data = await userAPI.getProfile(user.id);
+      setProfileData(data);
+    } catch (err) {
+      console.log('[v0] Profile fetch error:', err.message);
+      setProfileData(user);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleLogout = () => {
     if (window.confirm('Are you sure you want to logout?')) {
       onLogout();
@@ -10,52 +33,60 @@ export default function Profile({ user, onLogout, onNavigate }) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div style={{ minHeight: '100vh', backgroundColor: '#f5f7fa' }}>
       <Navigation currentPage="profile" onNavigate={onNavigate} />
 
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="bg-white rounded-lg shadow-sm p-8 border border-gray-200">
+      <main className="profile-container">
+        <div className="profile-card">
           {/* Profile Header */}
-          <div className="text-center mb-8">
-            <div className="flex justify-center mb-6">
-              <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center">
-                <span className="text-5xl">👤</span>
-              </div>
+          <div className="profile-header">
+            <div className="profile-avatar">👤</div>
+            <div className="profile-info">
+              <h2>{profileData.name || user.name}</h2>
+              <p>{profileData.email || user.email}</p>
             </div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">{user.name}</h1>
-            <p className="text-gray-600 mb-2">{user.email}</p>
-            <p className="text-sm bg-blue-50 text-blue-700 inline-block px-3 py-1 rounded-full font-semibold">
-              {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-            </p>
           </div>
 
-          <hr className="my-8" />
-
           {/* User Details */}
-          <div className="space-y-6 mb-8">
-            <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1">Full Name</label>
-              <p className="text-lg text-gray-900">{user.name}</p>
+          <div>
+            {error && (
+              <div
+                style={{
+                  backgroundColor: '#ffe6e6',
+                  borderRadius: '8px',
+                  color: '#ff3333',
+                  padding: '12px 16px',
+                  marginBottom: '16px',
+                  fontSize: '14px',
+                }}
+              >
+                {error}
+              </div>
+            )}
+
+            <div className="profile-field">
+              <span className="profile-label">Full Name</span>
+              <p className="profile-value">{profileData.name || user.name}</p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1">Email Address</label>
-              <p className="text-lg text-gray-900">{user.email}</p>
+            <div className="profile-field">
+              <span className="profile-label">Email Address</span>
+              <p className="profile-value">{profileData.email || user.email}</p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1">Phone Number</label>
-              <p className="text-lg text-gray-900">{user.phone}</p>
+            <div className="profile-field">
+              <span className="profile-label">Phone Number</span>
+              <p className="profile-value">{profileData.phone || user.phone}</p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1">Account Role</label>
-              <p className="text-lg text-gray-900">{user.role.charAt(0).toUpperCase() + user.role.slice(1)}</p>
+            <div className="profile-field">
+              <span className="profile-label">Account Role</span>
+              <p className="profile-value">{user.role.charAt(0).toUpperCase() + user.role.slice(1)}</p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1">Member Since</label>
-              <p className="text-lg text-gray-900">
+            <div className="profile-field">
+              <span className="profile-label">Member Since</span>
+              <p className="profile-value">
                 {new Date().toLocaleDateString('en-US', {
                   year: 'numeric',
                   month: 'long',
@@ -65,46 +96,44 @@ export default function Profile({ user, onLogout, onNavigate }) {
             </div>
           </div>
 
-          <hr className="my-8" />
-
           {/* Account Status */}
-          <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-8">
-            <h3 className="font-semibold text-green-900 mb-2">✓ Account Active</h3>
-            <p className="text-green-700 text-sm">
+          <div style={{ backgroundColor: '#e6f7ed', borderRadius: '12px', padding: '24px', marginBottom: '32px', border: '1px solid #00c853' }}>
+            <h3 style={{ fontWeight: 600, color: '#00c853', marginBottom: '8px' }}>✓ Account Active</h3>
+            <p style={{ fontSize: '14px', color: '#00c853' }}>
               Your account is in good standing and all services are active.
             </p>
           </div>
 
           {/* Logout Button */}
-          <button
-            onClick={handleLogout}
-            className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-lg transition"
-          >
-            Logout
-          </button>
+          <div className="profile-actions">
+            <button
+              onClick={handleLogout}
+              className="btn-logout"
+            >
+              Logout
+            </button>
+          </div>
 
           {/* Additional Options */}
-          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <button className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition font-medium">
+          <div style={{ marginTop: '32px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <button style={{ padding: '12px 16px', border: '1px solid #e0e6ed', borderRadius: '8px', color: '#1a1a1a', backgroundColor: 'transparent', cursor: 'pointer', fontWeight: 500, transition: 'all 0.2s ease' }}>
               Edit Profile
             </button>
-            <button className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition font-medium">
+            <button style={{ padding: '12px 16px', border: '1px solid #e0e6ed', borderRadius: '8px', color: '#1a1a1a', backgroundColor: 'transparent', cursor: 'pointer', fontWeight: 500, transition: 'all 0.2s ease' }}>
               Change Password
             </button>
-            <button className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition font-medium">
+            <button style={{ padding: '12px 16px', border: '1px solid #e0e6ed', borderRadius: '8px', color: '#1a1a1a', backgroundColor: 'transparent', cursor: 'pointer', fontWeight: 500, transition: 'all 0.2s ease' }}>
               Privacy Settings
             </button>
-            <button className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition font-medium">
+            <button style={{ padding: '12px 16px', border: '1px solid #e0e6ed', borderRadius: '8px', color: '#1a1a1a', backgroundColor: 'transparent', cursor: 'pointer', fontWeight: 500, transition: 'all 0.2s ease' }}>
               Support
             </button>
           </div>
         </div>
       </main>
 
-      <footer className="bg-white border-t border-gray-200 mt-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 text-center text-gray-600 text-sm">
-          © 2026 AquaGuard. All rights reserved.
-        </div>
+      <footer className="footer">
+        © 2026 AquaGuard. All rights reserved.
       </footer>
     </div>
   );

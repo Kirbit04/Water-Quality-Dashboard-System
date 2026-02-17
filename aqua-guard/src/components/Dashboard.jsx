@@ -1,5 +1,3 @@
-'use client';
-
 import Navigation from './Navigation';
 
 const mockData = {
@@ -15,13 +13,13 @@ const mockData = {
 
 const StatusBadge = ({ status }) => {
   const statusColors = {
-    Good: 'bg-green-100 text-green-800',
-    Moderate: 'bg-yellow-100 text-yellow-800',
-    Critical: 'bg-red-100 text-red-800',
+    Good: 'badge-good',
+    Moderate: 'badge-moderate',
+    Critical: 'badge-critical',
   };
 
   return (
-    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusColors[status]}`}>
+    <span className= {"kpi-badge ${statusColors[status]}" }>
       {status}
     </span>
   );
@@ -29,103 +27,99 @@ const StatusBadge = ({ status }) => {
 
 export default function Dashboard({ user, onNavigate }) {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div style={{ minHeight: '100vh', backgroundColor: '#f5f7fa' }}>
       <Navigation currentPage="dashboard" onNavigate={onNavigate} />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <main className="dashboard-container">
         {/* Welcome Section */}
-        <div className="bg-white rounded-lg shadow-sm p-8 mb-12 border border-gray-200">
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">Welcome to AquaGuard, {user.name}!</h1>
-          <p className="text-gray-600 mb-6">
+        <div className="welcome-section">
+          <h1 className="welcome-title">Welcome to AquaGuard, {user.name}!</h1>
+          <p className="welcome-subtitle">
             Your comprehensive overview of water quality. Monitor key parameters and receive
-            actionable recommendations to maintain a healthy aquatic environment.
+            actionable recommendations to maintain a healthy environment.
           </p>
           <button
             onClick={() => onNavigate('labtest')}
-            className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-full transition inline-flex items-center space-x-2"
+            className="welcome-button"
           >
-            <span>⬆️</span>
-            <span>Upload New Lab Test</span>
+            <span>⬆ Upload New Lab Test</span>
           </button>
         </div>
 
         {/* Key Performance Indicators */}
-        <div className="mb-12">
-          <h2 className="text-2xl font-bold text-gray-900 mb-8">Key Performance Indicators</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="kpi-section">
+          <h2 className="section-title">Key Performance Indicators</h2>
+          <div className="kpi-grid">
             {mockData.kpi.map((item, index) => (
-              <div key={index} className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-3xl">{item.icon}</span>
-                  <span className="text-xs font-medium text-gray-500">{item.unit}</span>
+              <div key={index} className="kpi-card">
+                <div className="kpi-header">
+                  <span className="kpi-icon">{item.icon}</span>
+                  <span className="kpi-unit">{item.unit}</span>
                 </div>
-                <h3 className="text-sm text-gray-600 mb-2">{item.label}</h3>
-                <div className="text-3xl font-bold text-gray-900 mb-3">{item.value}</div>
-                <StatusBadge status={item.status} />
+                <h3 className="kpi-label">{item.label}</h3>
+                <div className="kpi-value">{item.value}</div>
+                <StatusBadge status= {item.status} />
               </div>
             ))}
           </div>
         </div>
 
         {/* Health Score and Recommendations */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div>
           {/* Health Score */}
-          <div className="bg-white rounded-lg shadow-sm p-8 border border-gray-200 lg:col-span-1">
-            <p className="text-gray-600 mb-2">Health Score</p>
-            <div className="text-4xl font-bold text-gray-900">88%</div>
-            <div className="mt-4 w-full bg-gray-200 rounded-full h-2">
-              <div className="bg-green-500 h-2 rounded-full" style={{ width: '88%' }}></div>
-            </div>
-            <p className="text-sm text-gray-500 mt-2">Excellent water quality</p>
+          <div className="health-score">
+            <p className="health-score-label">Health Score</p>
+            <div className="health-score-value">88%</div>
+            <p className="health-score-label">Excellent water quality</p>
           </div>
 
           {/* Actionable Recommendations */}
-          <div className="bg-white rounded-lg shadow-sm p-8 border border-gray-200 lg:col-span-2">
-            <h3 className="text-xl font-bold text-gray-900 mb-6">Actionable Recommendations</h3>
-            <div className="space-y-4">
-              <div className="pb-4 border-b border-gray-200">
-                <h4 className="font-semibold text-gray-900 mb-1">pH Level</h4>
-                <p className="text-sm text-gray-600">
+          <div className="recommendations-section">
+            <h3 className='section-title'>Actionable Recommendations</h3>
+            <ul className="recommendations-list">
+              <li className='recommendation-item'>
+                <h4 className="recommendations-title">pH Level</h4>
+                <p className="recommendations-text">
                   Maintain regular monitoring to ensure stability.
                 </p>
-              </div>
-              <div className="pb-4 border-b border-gray-200">
-                <h4 className="font-semibold text-gray-900 mb-1">Turbidity</h4>
-                <p className="text-sm text-gray-600">
+              </li>
+              <li className='recommendation-item'>
+                <h4 className="recommendations-title">Turbidity</h4>
+                <p className="recommendations-text">
                   Ensure proper filtration system operation for clear water.
                 </p>
-              </div>
-              <div className="pb-4 border-b border-gray-200">
-                <h4 className="font-semibold text-gray-900 mb-1">Salinity</h4>
-                <p className="text-sm text-gray-600">
+              </li>
+              <li className='recommendation-item'>
+                <h4 className="recommendations-title">Salinity</h4>
+                <p className="recommendations-text">
                   Monitor freshwater inflow and evaporation rates.
                 </p>
-              </div>
-              <div className="pb-4 border-b border-gray-200">
-                <h4 className="font-semibold text-gray-900 mb-1">Dissolved Oxygen</h4>
-                <p className="text-sm text-gray-600">
+              </li>
+              <li className='recommendation-item'>
+                <h4 className="recommendations-title">Dissolved Oxygen</h4>
+                <p className="recommendations-text">
                   Consider increasing aeration or introducing aquatic plants to boost oxygen levels.
                 </p>
-              </div>
-              <div className="pb-4 border-b border-gray-200">
-                <h4 className="font-semibold text-gray-900 mb-1">Nitrates</h4>
-                <p className="text-sm text-gray-600">
+              </li>
+              <li className='recommendation-item'>
+                <h4 className="recommendations-title">Nitrates</h4>
+                <p className="recommendations-text">
                   Implement nutrient reduction strategies, check for agricultural runoff or excessive fertilization.
                 </p>
-              </div>
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-1">Phosphates</h4>
-                <p className="text-sm text-gray-600">
+              </li>
+              <li className='recommendation-item'>
+                <h4 className="recommendations-title">Phosphates</h4>
+                <p className="recommendations-text">
                   Address potential sources of phosphate pollution to prevent algal blooms.
                 </p>
-              </div>
-            </div>
+              </li>
+            </ul>
           </div>
         </div>
       </main>
 
-      <footer className="bg-white border-t border-gray-200 mt-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 text-center text-gray-600 text-sm">
+      <footer className="footer">
+        <div>
           © 2026 AquaGuard. All rights reserved.
         </div>
       </footer>

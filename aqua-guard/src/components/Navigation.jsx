@@ -1,65 +1,49 @@
-'use client';
-
 import logo from '../assets/AquAguard.png';
 
 export default function Navigation({ currentPage, onNavigate }) {
   return (
     <nav className="navbar">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          {/* Left Navigation */}
-          <div className="navbar-left">
+        {/* Left Navigation */}
+      <div className="navbar-left">
+        <ul className='navbar-links'>
+          <li>
             <button
-              onClick={() => onNavigate('dashboard')}
-              className={`flex items-center space-x-1 py-2 px-1 border-b-2 transition ${
-                currentPage === 'dashboard'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
+              onClick={() => onNavigate('dashboard')} className="navbar-link"
             >
-              <span>🏠</span>
-              <span className="text-sm font-medium">Home</span>
+            Home
             </button>
-
+          </li>
+          <li>
             <button
-              onClick={() => onNavigate('about')}
-              className={`flex items-center space-x-1 py-2 px-1 border-b-2 transition ${
-                currentPage === 'about'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
+              onClick={() => onNavigate('about')} className="navbar-link"
             >
-              <span>ℹ️</span>
-              <span className="text-sm font-medium">About Us</span>
+            About Us
             </button>
-
+          </li>
+          <li>
             <button
-              onClick={() => onNavigate('contact')}
-              className={`flex items-center space-x-1 py-2 px-1 border-b-2 transition ${
-                currentPage === 'contact'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
+              onClick={() => onNavigate('contact')} className="navbar-link"
             >
-              <span>✉️</span>
-              <span className="text-sm font-medium">Contact</span>
-            </button>
-          </div>
+            Contact Us
+        </button>
+          </li>
+        </ul>
+      </div>
 
-          {/* Center Logo */}
-          <div className="navbar-logo">
-            <img src={logo} alt="AquaGuard Logo" className="w-full h-full" />
-          </div>
+          {/*Logo */}
+      <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+        <img src={logo} alt="AquaGuard Logo" className='navbar-logo'/>
+      </div>
 
-          {/* Right - Profile */}
-          <button
-            onClick={() => onNavigate('profile')}
-            className="navbar-right"
-            title="Profile"
-          >
-            <span className="profile-icon">👤</span>
-          </button>
-        </div>
+        {/* Right - Profile */}
+      <div className='navbar-right'>
+        <button
+          onClick={() => onNavigate('profile')}
+          className="profile-icon"
+          title="Profile"
+        >
+        👤
+        </button>
       </div>
     </nav>
   );
