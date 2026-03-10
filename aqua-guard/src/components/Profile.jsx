@@ -5,7 +5,7 @@ import { userAPI } from '../api';
 export default function Profile({ user, onLogout, onNavigate }) {
   const [profileData, setProfileData] = useState(user);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error] = useState('');
 
   useEffect(() => {
     fetchUserProfile();
@@ -34,13 +34,13 @@ export default function Profile({ user, onLogout, onNavigate }) {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f5f7fa' }}>
-      <Navigation currentPage="profile" onNavigate={onNavigate} />
+      <Navigation currentPage="profile" onNavigate={onNavigate} user={user} />
 
       <main className="profile-container">
         <div className="profile-card">
           {/* Profile Header */}
           <div className="profile-header">
-            <div className="profile-avatar">👤</div>
+            <div className="profile-avatar">{user?.name?.charAt(0)?.toUpperCase() || 'U'}</div>
             <div className="profile-info">
               <h2>{profileData.name || user.name}</h2>
               <p>{profileData.email || user.email}</p>
@@ -111,22 +111,6 @@ export default function Profile({ user, onLogout, onNavigate }) {
               className="btn-logout"
             >
               Logout
-            </button>
-          </div>
-
-          {/* Additional Options */}
-          <div style={{ marginTop: '32px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <button style={{ padding: '12px 16px', border: '1px solid #e0e6ed', borderRadius: '8px', color: '#1a1a1a', backgroundColor: 'transparent', cursor: 'pointer', fontWeight: 500, transition: 'all 0.2s ease' }}>
-              Edit Profile
-            </button>
-            <button style={{ padding: '12px 16px', border: '1px solid #e0e6ed', borderRadius: '8px', color: '#1a1a1a', backgroundColor: 'transparent', cursor: 'pointer', fontWeight: 500, transition: 'all 0.2s ease' }}>
-              Change Password
-            </button>
-            <button style={{ padding: '12px 16px', border: '1px solid #e0e6ed', borderRadius: '8px', color: '#1a1a1a', backgroundColor: 'transparent', cursor: 'pointer', fontWeight: 500, transition: 'all 0.2s ease' }}>
-              Privacy Settings
-            </button>
-            <button style={{ padding: '12px 16px', border: '1px solid #e0e6ed', borderRadius: '8px', color: '#1a1a1a', backgroundColor: 'transparent', cursor: 'pointer', fontWeight: 500, transition: 'all 0.2s ease' }}>
-              Support
             </button>
           </div>
         </div>

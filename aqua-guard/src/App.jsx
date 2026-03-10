@@ -14,64 +14,68 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user has a saved auth token
-    const token = localStorage.getItem('authToken');
-    
-    if (token) {
-      // Fetch fresh user data from your FastAPI backend
-      fetchUserProfile(token);
-    } else {
-      setLoading(false);
-    }
+    //getting user profile
+      fetchUserProfile();
   }, []);
 
-  const fetchUserProfile = async (token) => {
+  const fetchUserProfile = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/users/me', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const response = await fetch('http://localhost:8000/api/v1/users/me', {
+        credentials: 'include', // adds cookies to the request
       });
       
       if (response.ok) {
         const userData = await response.json();
         setUser(userData);
         setCurrentPage('dashboard');
-      } else {
-        // Token invalid, clear it
-        localStorage.removeItem('authToken');
-      }
+      } 
+      
     } catch (error) {
       console.error('Failed to fetch user:', error);
-      localStorage.removeItem('authToken');
     } finally {
       setLoading(false);
     }
   };
 
   const handleLogin = (userData) => {
-    // Store only the token in localStorage
-    localStorage.setItem('authToken', userData.token);
     setUser(userData);
-    setCurrentPage('dashboard');
+    if (userData.role === 'admin') {
+      setCurrentPage('admin');
+    } else {
+      setCurrentPage('dashboard');
+    }
   };
 
-  const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem('authToken');
-    setCurrentPage('login');
+
+  const handleLogout = async () => {
+    try {
+      await fetch('http://localhost:8000/api/v1/auth/logout', {
+        method: 'POST',
+        credentials: 'include',  //sends cookies for deletion
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setUser(null);
+      setCurrentPage('login');
+    }
   };
 
   const navigateTo = (page) => {
     setCurrentPage(page);
   };
+/*
+  if (loading){
+    return <div>Loading...</div>;
+  }
+*/
 
-  if (!user && (currentPage === 'dashboard' || currentPage === 'labtest' || currentPage === 'profile' || currentPage === 'about' || currentPage === 'contact')) {
+  if (!user && (currentPage === 'dashboard' || currentPage === 'labtest' || currentPage === 'profile' || currentPage === 'about' || currentPage === 'contact' || currentPage === 'admin')) {
     setCurrentPage('login');
   }
 
   return (
-    <main className="min-h-screen bg-white">
+    <main>
       {currentPage === 'login' && (
         <Login onLogin={handleLogin} onSwitchToSignup={() => setCurrentPage('signup')} />
       )}
@@ -85,16 +89,16 @@ function App() {
         <LabTest user={user} onNavigate={navigateTo} />
       )}
       {currentPage === 'about' && user && (
-        <About onNavigate={navigateTo} />
+        <About user={user} onNavigate={navigateTo} />
       )}
       {currentPage === 'contact' && user && (
-        <Contact onNavigate={navigateTo} />
+        <Contact user={user} onNavigate={navigateTo} />
       )}
       {currentPage === 'profile' && user && (
         <Profile user={user} onLogout={handleLogout} onNavigate={navigateTo} />
       )}
-      {currentPage === 'admin' && user && user.role === 'admin' && (
-        <AdminPanel user={user} onNavigate={navigateTo} />
+      {currentPage === 'admin' && user?.role === 'admin' && (
+        <AdminPanel user={user} onLogout={handleLogout} onNavigate={navigateTo} />
       )}
     </main>
   );

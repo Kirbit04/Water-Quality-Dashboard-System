@@ -7,12 +7,13 @@ import re
 class UserBase(BaseModel):
     #Base User schema with common attributes
     email: EmailStr = Field(..., description="Email address")
-    full_name: Optional[str] = Field(None, max_length=100, description="Full name")
-    phone_number: Optional[str] = Field(None, max_length=20, description="Phone number")
+    name: Optional[str] = Field(None, max_length=100, description="Full name")
+    role: str = Field(..., description="User role (e.g., 'user', 'admin')")
+    phone: Optional[str] = Field(None, max_length=20, description="Phone number")
     
-    @field_validator('phone_number')
+    @field_validator('phone')
     @classmethod
-    def validate_phone_number(cls, v):
+    def validate_phone(cls, v):
         """Validate phone number format: +254 followed by 9 digits or other country codes"""
         if v is None or v == '':
             return v
@@ -33,15 +34,27 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     #Schema for creating a new user"
-    password: str = Field(..., min_length=6, max_length=100, description="Password")
+    name: str = Field(..., max_length=100, description="Full name")
+    password: str = Field(..., min_length=6, max_length=72, description="Password")
+    phone: Optional[str] = Field(None, max_length=20, description="Phone number")
+    role: str = Field(..., description="User role (e.g., 'user', 'admin')")
+
+    @field_validator('password')
+    @classmethod
+    def validate_password_bytes(cls, v):
+        if len(v.encode('utf-8')) > 72:
+            raise ValueError('Password cannot exceed 72 bytes. Please shorten it.')
+        return v
+
     
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "email": "john@example.com",
-                "full_name": "John Doe",
-                "phone_number": "+254723456789",
-                "password": "securepassword123"
+                "name": "John Doe",
+                "phone": "+254723456789",
+                "password": "securepassword123",
+                "role": "user"
             }
         }
     )
@@ -50,8 +63,8 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     #Schema for updating user information
     email: Optional[EmailStr] = None
-    full_name: Optional[str] = Field(None, max_length=100)
-    phone_number: Optional[str] = Field(None, max_length=20)
+    name: Optional[str] = Field(None, max_length=100)
+    phone: Optional[str] = Field(None, max_length=20)
     password: Optional[str] = Field(None, min_length=6, max_length=100)
     is_active: Optional[bool] = None
     
@@ -59,8 +72,8 @@ class UserUpdate(BaseModel):
         json_schema_extra={
             "example": {
                 "email": "newemail@example.com",
-                "full_name": "John Updated Doe",
-                "phone_number": "+254734567890",
+                "name": "John Updated Doe",
+                "phone": "+254734567890",
                 "is_active": True
             }
         }
@@ -70,10 +83,14 @@ class UserUpdate(BaseModel):
 class UserInDB(UserBase):
     #Schema for user as stored in database
     id: int
+    name: Optional[str]
+    hashed_password: str
+    phone: Optional[str]
+    role: str
     is_active: bool
     created_at: datetime
     updated_at: datetime
-    hashed_password: str
+
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -81,18 +98,23 @@ class UserInDB(UserBase):
 class UserResponse(UserBase):
     #Schema for user response 
     id: int
+    email: EmailStr
+    name: str
+    role: str
+    phone: Optional[str]
     is_active: bool
     created_at: datetime
     updated_at: datetime
     
     model_config = ConfigDict(
         from_attributes=True,
+        populate_by_name=True,
         json_schema_extra={
             "example": {
-                "id": 1,
                 "email": "john@example.com",
-                "full_name": "John Doe",
-                "phone_number": "+25473456789",
+                "name": "John Doe",
+                "phone": "+25473456789",
+                "role": "user",
                 "is_active": True,
                 "created_at": "2024-01-23T10:30:00",
                 "updated_at": "2024-01-23T10:30:00"
@@ -105,45 +127,23 @@ class UserLogin(BaseModel):
     #Schema for user login
     email: EmailStr = Field(..., description="Email address")
     password: str = Field(..., description="Password")
+    role: str = Field(..., description="User role (e.g., 'user', 'admin')")
     
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "email": "john@example.com",
-                "password": "securepassword123"
+                "password": "securepassword123",
+                "role": "user"
             }
         }
     )
-
-
-class Token(BaseModel):
-    #Schema for authentication token response
-    access_token: str
-    token_type: str = "bearer"
-    expires_in: int
-    
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-                "token_type": "bearer",
-                "expires_in": 1800
-            }
-        }
-    )
-
-
-class TokenData(BaseModel):
-    """Schema for token payload data"""
-    username: Optional[str] = None
-    user_id: Optional[int] = None
-
 
 # Lab Test Schemas
 class LabTestCreate(BaseModel):
-    """Schema for creating a lab test"""
+    #Schema for creating a lab test
     occupation: str = Field(..., min_length=1, max_length=100, description="Occupation")
-    location: str = Field(..., min_length=1, max_length=100, description="Location")
+    location_id: int = Field(..., description="Location ID")
     date_of_test: Optional[datetime] = Field(None, description="Date of test")
     ph: float = Field(..., ge=0, le=14, description="pH level (0-14)")
     turbidity: float = Field(..., ge=0, description="Turbidity (positive number)")
@@ -156,7 +156,7 @@ class LabTestCreate(BaseModel):
         json_schema_extra={
             "example": {
                 "occupation": "Farmer",
-                "location": "Nairobi, Kenya",
+                "location_id": "1",
                 "date_of_test": "2026-01-17",
                 "ph": 7.5,
                 "turbidity": 2.3,
@@ -170,11 +170,11 @@ class LabTestCreate(BaseModel):
 
 
 class LabTestResponse(BaseModel):
-    """Schema for lab test response"""
+    #Schema for lab test response
     id: int
     user_id: int
     occupation: str
-    location: str
+    location_id: int
     date_of_test: Optional[datetime]
     ph: float
     turbidity: float
@@ -192,7 +192,7 @@ class LabTestResponse(BaseModel):
                 "id": 1,
                 "user_id": 1,
                 "occupation": "Farmer",
-                "location": "Nairobi, Kenya",
+                "location_id": "1",
                 "date_of_test": "2026-01-17T00:00:00",
                 "ph": 7.5,
                 "turbidity": 2.3,
@@ -209,7 +209,7 @@ class LabTestResponse(BaseModel):
 
 # Contact Message Schemas
 class ContactMessageCreate(BaseModel):
-    """Schema for creating a contact message"""
+    #Schema for creating a contact message
     name: str = Field(..., min_length=2, max_length=100, description="Name")
     email: EmailStr = Field(..., description="Email address")
     message: str = Field(..., min_length=10, max_length=5000, description="Message")
@@ -226,7 +226,7 @@ class ContactMessageCreate(BaseModel):
 
 
 class ContactMessageResponse(BaseModel):
-    """Schema for contact message response"""
+    #Schema for contact message response
     id: int
     name: str
     email: str

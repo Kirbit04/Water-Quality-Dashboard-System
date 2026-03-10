@@ -2,6 +2,71 @@ import { useState } from 'react';
 import { authAPI } from '../api';
 import logo from '../assets/AquAguard.png';
 
+// Validation Rules 
+const login_valid_rules = {
+  email: {
+    required: true,
+    validate: (value) => value.includes('@') && value.split('@')[1]?.includes('.'),
+    errorMessages: {
+      required: 'Email is required',
+      pattern: 'Please enter a valid email address',
+    }
+  },
+  password: {
+    required: true,
+    minLength: 6,
+    errorMessages: {
+      required: 'Password is required',
+      minLength: 'Password must be at least 6 characters',
+    }
+  },
+  role: {
+    required: true,
+    errorMessages: {
+      required: 'Please select a role',
+    }
+  }
+};
+
+// Validator Function
+const validateLoginField = (fieldName, value) => {
+  const rule = login_valid_rules[fieldName];
+  if (!rule) return null;
+
+  // Check required
+  if (rule.required && (!value || value.trim() === '')) {
+    return rule.errorMessages.required;
+  }
+
+  // Skip validation if field is empty
+  if (!value || value.trim() === '') return null;
+
+  // Check minLength and maxLength
+  if (rule.minLength && value.length < rule.minLength) {
+    return rule.errorMessages.minLength;
+  }
+  if (rule.maxLength && value.length > rule.maxLength) {
+    return rule.errorMessages.maxLength;
+  }
+
+  // Check pattern
+  if (rule.validate && !rule.validate(value)) {
+    return rule.errorMessages.pattern;
+  }
+
+  return null;
+};
+
+// Batch Validation Function
+const validateLoginForm = (formData) => {
+  const errors = {};
+  Object.keys(login_valid_rules).forEach(fieldName => {
+    const error = validateLoginField(fieldName, formData[fieldName]);
+    if (error) errors[fieldName] = error;
+  });
+  return errors;
+};
+
 export default function Login({ onLogin, onSwitchToSignup }) {
   const [formData, setFormData] = useState({
     email: '',
@@ -12,38 +77,6 @@ export default function Login({ onLogin, onSwitchToSignup }) {
   const [fieldErrors, setFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
-  const validateEmail = (email) => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  };
-
-  const validateField = (name, value) => {
-    const errors = {};
-    
-    if (name === 'email' || name === 'all') {
-      if (!formData.email && name === 'all') {
-        errors.email = 'Email is required';
-      } else if (formData.email && !validateEmail(formData.email)) {
-        errors.email = 'Please enter a valid email address';
-      }
-    }
-    
-    if (name === 'password' || name === 'all') {
-      if (!formData.password && name === 'all') {
-        errors.password = 'Password is required';
-      } else if (formData.password && formData.password.length < 6) {
-        errors.password = 'Password must be at least 6 characters';
-      }
-    }
-    
-    if (name === 'role' || name === 'all') {
-      if (!formData.role && name === 'all') {
-        errors.role = 'Please select a role';
-      }
-    }
-    
-    return errors;
-  };
-
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -51,13 +84,16 @@ export default function Login({ onLogin, onSwitchToSignup }) {
       [name]: value,
     }));
     
+    // Real-time validation for this field
+    const fieldError = validateLoginField(name, value);
     const newErrors = { ...fieldErrors };
-    const fieldValidation = validateField(name, value);
-    if (fieldValidation[name]) {
-      newErrors[name] = fieldValidation[name];
+    
+    if (fieldError) {
+      newErrors[name] = fieldError;
     } else {
       delete newErrors[name];
     }
+    
     setFieldErrors(newErrors);
     setError('');
   };
@@ -66,7 +102,8 @@ export default function Login({ onLogin, onSwitchToSignup }) {
     e.preventDefault();
     setError('');
     
-    const validationErrors = validateField('all');
+    // Validate all fields
+    const validationErrors = validateLoginForm(formData);
     setFieldErrors(validationErrors);
 
     if (Object.keys(validationErrors).length > 0) {
@@ -83,12 +120,23 @@ export default function Login({ onLogin, onSwitchToSignup }) {
         id: response.userId || response.id,
         name: response.name,
         email: response.email,
-        role: response.role,
-        phone: response.phone,
+        role: response.role || formData.role,
       });
+      console.log('User role:', formData.role);
+      console.log('Token:', response.token)
+
     } catch (err) {
-      setError(err.message || 'Invalid email or password');
-      setFieldErrors({ password: 'Credentials do not match' });
+      // Backend Error Mapping
+      const errorMessage = err.message || 'Invalid email or password';
+      setError(errorMessage);
+      
+      if (errorMessage.toLowerCase().includes('password')) {
+        setFieldErrors({ password: 'Incorrect password' });
+      } else if (errorMessage.toLowerCase().includes('email')) {
+        setFieldErrors({ email: 'Email not found' });
+      } else {
+        setFieldErrors({ password: 'Credentials do not match' });
+      }
     } finally {
       setLoading(false);
     }

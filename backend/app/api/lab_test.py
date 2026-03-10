@@ -14,17 +14,16 @@ router = APIRouter(prefix="/lab-tests", tags=["lab-tests"])
 
 
 class LabTestService:
-    """Service for lab test business logic"""
     
     def __init__(self, repo: LabTestRepository):
         self.repo = repo
     
     def submit_test(self, user_id: int, test_data: LabTestCreate) -> LabTest:
-        """Submit a new lab test"""
+        #submitting a new lab test
         lab_test = LabTest(
             user_id=user_id,
             occupation=test_data.occupation,
-            location=test_data.location,
+            location_id=test_data.location_id,
             date_of_test=test_data.date_of_test,
             ph=test_data.ph,
             turbidity=test_data.turbidity,
@@ -42,15 +41,15 @@ class LabTestService:
         return created
     
     def get_user_tests(self, user_id: int, skip: int = 0, limit: int = 100) -> List[LabTest]:
-        """Get all test submissions for a user"""
+        #Get all user submissions 
         return self.repo.get_by_user_id(user_id, skip, limit)
     
     def get_all_tests(self, skip: int = 0, limit: int = 100) -> List[LabTest]:
-        """Get all test submissions (admin)"""
+        #Get all test submissions (admin)
         return self.repo.get_all(skip, limit)
     
     def get_test(self, test_id: int) -> LabTest:
-        """Get a specific test"""
+        #Get a specific test
         test = self.repo.get_by_id(test_id)
         if not test:
             raise ValueError("Test not found")
@@ -58,7 +57,7 @@ class LabTestService:
 
 
 class LabTestController:
-    """Controller for lab test endpoints"""
+    #Controller for lab test endpoints"
     
     def __init__(self, service: LabTestService):
         self.service = service
@@ -72,7 +71,7 @@ class LabTestController:
                 id=lab_test.id,
                 user_id=lab_test.user_id,
                 occupation=lab_test.occupation,
-                location=lab_test.location,
+                location_id=lab_test.location_id,
                 date_of_test=lab_test.date_of_test,
                 ph=lab_test.ph,
                 turbidity=lab_test.turbidity,
@@ -90,7 +89,7 @@ class LabTestController:
             raise HTTPException(status_code=500, detail="Failed to submit test")
     
     async def get_user_tests(self, user_id: int, skip: int = 0, limit: int = 100) -> List[LabTestResponse]:
-        """Get user's test submissions"""
+        #Get user's test submissions
         try:
             tests = self.service.get_user_tests(user_id, skip, limit)
             
@@ -99,7 +98,7 @@ class LabTestController:
                     id=t.id,
                     user_id=t.user_id,
                     occupation=t.occupation,
-                    location=t.location,
+                    location_id=t.location_id,
                     date_of_test=t.date_of_test,
                     ph=t.ph,
                     turbidity=t.turbidity,
@@ -118,7 +117,7 @@ class LabTestController:
 
 
 def get_lab_test_service() -> LabTestService:
-    """Dependency injection for LabTestService"""
+    #Dependency injection for LabTestService
     db = get_db_instance()
     repo = LabTestRepository(db)
     return LabTestService(repo)
@@ -131,22 +130,6 @@ async def submit_test(
     user_id: int = 1,  # TODO: Get from JWT token
     service: LabTestService = Depends(get_lab_test_service)
 ) -> LabTestResponse:
-    """
-    Submit a water quality lab test
-    
-    **Request body:**
-    - **occupation**: User's occupation
-    - **location**: Test location
-    - **date_of_test**: Date of test (optional)
-    - **ph**: pH level (0-14)
-    - **turbidity**: Turbidity value
-    - **salinity**: Salinity value
-    - **dissolved_oxygen**: Dissolved oxygen level
-    - **nitrates**: Nitrates level
-    - **phosphates**: Phosphates level
-    
-    **Returns:** LabTestResponse with test details and ID
-    """
     controller = LabTestController(service)
     return await controller.submit(user_id, test_data)
 
@@ -158,18 +141,6 @@ async def get_user_tests(
     limit: int = 100,
     service: LabTestService = Depends(get_lab_test_service)
 ) -> List[LabTestResponse]:
-    """
-    Get all lab tests submitted by a user
-    
-    **Path Parameters:**
-    - **user_id**: User ID
-    
-    **Query Parameters:**
-    - **skip**: Number of records to skip (default: 0)
-    - **limit**: Maximum records to return (default: 100)
-    
-    **Returns:** List of LabTestResponse objects
-    """
     controller = LabTestController(service)
     return await controller.get_user_tests(user_id, skip, limit)
 
@@ -180,15 +151,7 @@ async def get_all_tests(
     limit: int = 100,
     service: LabTestService = Depends(get_lab_test_service)
 ) -> List[LabTestResponse]:
-    """
-    Get all lab tests (admin endpoint)
-    
-    **Query Parameters:**
-    - **skip**: Number of records to skip (default: 0)
-    - **limit**: Maximum records to return (default: 100)
-    
-    **Returns:** List of LabTestResponse objects
-    """
+
     try:
         tests = service.get_all_tests(skip, limit)
         
@@ -197,7 +160,7 @@ async def get_all_tests(
                 id=t.id,
                 user_id=t.user_id,
                 occupation=t.occupation,
-                location=t.location,
+                location_id=t.location_id,
                 date_of_test=t.date_of_test,
                 ph=t.ph,
                 turbidity=t.turbidity,
@@ -220,14 +183,7 @@ async def get_test(
     test_id: int,
     service: LabTestService = Depends(get_lab_test_service)
 ) -> LabTestResponse:
-    """
-    Get a specific lab test by ID
-    
-    **Path Parameters:**
-    - **test_id**: Lab test ID
-    
-    **Returns:** LabTestResponse with test details
-    """
+
     try:
         test = service.get_test(test_id)
         
@@ -235,7 +191,7 @@ async def get_test(
             id=test.id,
             user_id=test.user_id,
             occupation=test.occupation,
-            location=test.location,
+            location_id=test.location_id,
             date_of_test=test.date_of_test,
             ph=test.ph,
             turbidity=test.turbidity,

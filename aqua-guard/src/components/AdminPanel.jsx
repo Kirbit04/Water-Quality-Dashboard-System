@@ -98,7 +98,7 @@ export default function AdminPanel({ user, onLogout, onNavigate }) {
             className="admin-user-avatar"
             title="Logout"
           >
-            👤
+            {user?.name ? user.name[0].toUpperCase() : '?'}
           </button>
         </div>
       </header>
@@ -166,8 +166,7 @@ export default function AdminPanel({ user, onLogout, onNavigate }) {
             {/* Download Button */}
             <div className="admin-controls">
               <button onClick={handleDownloadAll} className="btn-download">
-                <span>⬇️</span>
-                Download All Test Data (CSV for ML)
+                Download All Test Data(CSV)
               </button>
             </div>
 
@@ -200,10 +199,10 @@ export default function AdminPanel({ user, onLogout, onNavigate }) {
                         <td>
                           <div className="table-actions">
                             <button className="btn-action btn-action-download" title="Download">
-                              ⬇️ Download
+                              Download
                             </button>
                             <button className="btn-action btn-action-view" title="View Details">
-                              View Details →
+                              View Details
                             </button>
                           </div>
                         </td>

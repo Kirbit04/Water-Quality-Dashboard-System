@@ -5,12 +5,12 @@ import { labTestAPI } from '../api';
 export default function LabTest({ user, onNavigate }) {
   const [formData, setFormData] = useState({
     occupation: '',
-    location: '',
-    dateOfTest: '2026-01-17',
+    location_id: '',
+    date_of_test: '2026-01-17',
     ph: '',
     turbidity: '',
     salinity: '',
-    dissolvedOxygen: '',
+    dissolved_oxygen: '',
     nitrates: '',
     phosphates: '',
   });
@@ -26,8 +26,8 @@ export default function LabTest({ user, onNavigate }) {
       errors.occupation = 'Occupation is required';
     }
     
-    if ((name === 'location' || name === 'all') && !formData.location && name === 'all') {
-      errors.location = 'Location is required';
+    if ((name === 'location_id' || name === 'all') && !formData.location_id && name === 'all') {
+      errors.location_id = 'Location is required';
     }
     
     if ((name === 'ph' || name === 'all') && !formData.ph && name === 'all') {
@@ -48,10 +48,10 @@ export default function LabTest({ user, onNavigate }) {
       errors.salinity = 'Salinity must be a positive number';
     }
     
-    if ((name === 'dissolvedOxygen' || name === 'all') && !formData.dissolvedOxygen && name === 'all') {
-      errors.dissolvedOxygen = 'Dissolved oxygen is required';
-    } else if (formData.dissolvedOxygen && (isNaN(formData.dissolvedOxygen) || formData.dissolvedOxygen < 0)) {
-      errors.dissolvedOxygen = 'Dissolved oxygen must be a positive number';
+    if ((name === 'dissolved_oxygen' || name === 'all') && !formData.dissolved_oxygen && name === 'all') {
+      errors.dissolved_oxygen = 'Dissolved oxygen is required';
+    } else if (formData.dissolved_oxygen && (isNaN(formData.dissolved_oxygen) || formData.dissolved_oxygen < 0)) {
+      errors.dissolved_oxygen = 'Dissolved oxygen must be a positive number';
     }
     
     if ((name === 'nitrates' || name === 'all') && !formData.nitrates && name === 'all') {
@@ -88,7 +88,6 @@ export default function LabTest({ user, onNavigate }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setSubmitMessage('');
     
     const validationErrors = validateField('all');
     setFieldErrors(validationErrors);
@@ -109,20 +108,20 @@ export default function LabTest({ user, onNavigate }) {
       setSubmitMessage('Lab test submitted successfully!');
       setFormData({
         occupation: '',
-        location: '',
-        dateOfTest: '2026-01-17',
+        location_id: '',
+        date_of_test: '2026-01-17',
         ph: '',
         turbidity: '',
         salinity: '',
-        dissolvedOxygen: '',
+        dissolved_oxygen: '',
         nitrates: '',
         phosphates: '',
       });
       setFieldErrors({});
       
       setTimeout(() => {
-        setSubmitMessage('');
-      }, 3000);
+        onNavigate('dashboard');
+      }, 1500);
     } catch (err) {
       setSubmitMessage(`Error: ${err.message || 'Failed to submit lab test'}`);
     } finally {
@@ -132,7 +131,7 @@ export default function LabTest({ user, onNavigate }) {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f5f7fa' }}>
-      <Navigation currentPage="labtest" onNavigate={onNavigate} />
+      <Navigation currentPage="labtest" onNavigate={onNavigate} user={user} />
 
       <main className="lab-test-container">
         <div className="lab-test-form">
@@ -166,26 +165,26 @@ export default function LabTest({ user, onNavigate }) {
                 <div className="form-group">
                   <label className="form-label">Location</label>
                   <select
-                    name="location"
-                    value={formData.location}
+                    name="location_id"
+                    value={formData.location_id}
                     onChange={handleChange}
                     className="form-select"
-                    style={{ borderColor: fieldErrors.location ? '#ff3333' : 'var(--input-border)' }}
+                    style={{ borderColor: fieldErrors.location_id ? '#ff3333' : 'var(--input-border)' }}
                   >
                     <option value="">Select Location</option>
-                    <option value="Ng'ong">Ng'ong</option>
-                    <option value="Ongata Rongai">Ongata Rongai</option>
-                    <option value="Rimpa">Rimpa</option>
+                    <option value="1">Ngong</option>
+                    <option value="2">Ongata Rongai</option>
+                    <option value="3">Rimpa</option>
                   </select>
-                  {fieldErrors.location && <div className="error-message">{fieldErrors.location}</div>}
+                  {fieldErrors.location_id && <div className="error-message">{fieldErrors.location_id}</div>}
                 </div>
               </div>
               <div className="form-group">
                 <label className="form-label">Date of Test</label>
                 <input
                   type="date"
-                  name="dateOfTest"
-                  value={formData.dateOfTest}
+                  name="date_of_test"
+                  value={formData.date_of_test}
                   onChange={handleChange}
                   className="form-input"
                 />
@@ -248,8 +247,8 @@ export default function LabTest({ user, onNavigate }) {
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <input
                       type="number"
-                      name="dissolvedOxygen"
-                      value={formData.dissolvedOxygen}
+                      name="dissolved_oxygen"
+                      value={formData.dissolved_oxygen}
                       onChange={handleChange}
                       step="0.1"
                       placeholder="8.5"
@@ -309,16 +308,10 @@ export default function LabTest({ user, onNavigate }) {
             {/* Buttons */}
             <div className="form-actions">
               <button
-                type="button"
-                className="btn btn-secondary"
-              >
-                Upload Test
-              </button>
-              <button
                 type="submit"
                 className="btn btn-primary"
               >
-                Save/Test Submit
+                Test Submit
               </button>
             </div>
           </form>

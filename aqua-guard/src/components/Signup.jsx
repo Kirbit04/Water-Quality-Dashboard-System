@@ -2,8 +2,107 @@ import { useState } from 'react';
 import { authAPI } from '../api';  
 import logo from '../assets/AquAguard.png';
 
+// Validation Rules 
+const Validation_rules = {
+  name: {
+    required: true,
+    minLength: 2,
+    maxLength: 100,
+    errorMessages: {
+      required: 'Name is required',
+      minLength: 'Name must be at least 2 characters',
+      maxLength: 'Name must be at most 100 characters',
+    }
+  },
+  email: {
+    required: true,
+    validate: (value) => value.includes('@') && value.split('@')[1]?.includes('.'),
+    errorMessages: {
+      required: 'Email is required',
+      pattern: 'Please enter a valid email address',
+    }
+  },
+  password: {
+    required: true,
+    minLength: 6,
+    maxLength: 72,
+    errorMessages: {
+      required: 'Password is required',
+      minLength: 'Password must be at least 6 characters',
+      maxLength: 'Password must be at most 72 characters',
+    }
+  },
+  confirmPassword: {
+    required: true,
+    match: 'password',
+    errorMessages: {
+      required: 'Please confirm your password',
+      match: 'Passwords do not match',
+    }
+  },
+  phone: {
+    required: true,
+    validate: (value) => {
+      const stripped = value.replace(/[\s\-]/g, '');
+      return stripped.startsWith('+') && !isNaN(stripped.slice(1)) && stripped.length >= 10;
+    },
+    errorMessages: {
+      required: 'Phone number is required',
+      pattern: 'Use format: +[country_code][9+ digits] (e.g., +254723456789)',
+    }
+  }
+};
 
+// Validator Function
+const validateFieldValue = (fieldName, value, allFormData) => {
+  const rule = Validation_rules[fieldName];
+  if (!rule) return null;
 
+  // Handle optional fields
+  if (rule.optional && !value) return null;
+
+  // Check required
+  if (rule.required && (!value || value.trim() === '')) {
+    return rule.errorMessages.required;
+  }
+
+  // Skip validation if field is empty and optional
+  if (!value || value.trim() === '') return null;
+
+  // Check minLength and maxLength
+  if (rule.minLength && value.length < rule.minLength) {
+    return rule.errorMessages.minLength;
+  }
+  if (rule.maxLength && value.length > rule.maxLength) {
+    return rule.errorMessages.maxLength;
+  }
+
+  // Check pattern
+  if (rule.validate && !rule.validate(value)) {
+    return rule.errorMessages.pattern;
+  }
+
+  // Check match (for confirmPassword)
+  if (rule.match && value !== allFormData[rule.match]) {
+    return rule.errorMessages.match;
+  }
+
+  return null;
+};
+
+// Batch Validation Function
+const validateForm = (formData) => {
+  const errors = {};
+  
+  Object.keys(Validation_rules).forEach(fieldName => {
+    const error = validateFieldValue(fieldName, formData[fieldName], formData);
+    if (error) {
+      errors[fieldName] = error;
+    }
+  });
+
+  return errors;
+};
 export default function Signup({ onSignup, onSwitchToLogin }) {
   const [formData, setFormData] = useState({
     name: '',
@@ -16,76 +115,24 @@ export default function Signup({ onSignup, onSwitchToLogin }) {
   const [fieldErrors, setFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
-  const validateEmail = (email) => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  };
-
-  const validatePhone = (phone) => {
-    if (!phone) return true; 
-    const pattern = /^\+\d{1,3}\d{9,}$/;
-    return pattern.test(phone.replace(/[\s\-]/g, ''));
-  };
-
-  const validateField = (name, value) => {
-    const errors = {};
-    
-    if (name === 'name' || name === 'all') {
-      if (!formData.name && name === 'all') {
-        errors.name = 'Name is required';
-      } else if (formData.name && formData.name.trim().length < 2) {
-        errors.name = 'Name must be at least 2 characters';
-      }
-    }
-    
-    if (name === 'email' || name === 'all') {
-      if (!formData.email && name === 'all') {
-        errors.email = 'Email is required';
-      } else if (formData.email && !validateEmail(formData.email)) {
-        errors.email = 'Please enter a valid email address';
-      }
-    }
-    
-    if (name === 'password' || name === 'all') {
-      if (!formData.password && name === 'all') {
-        errors.password = 'Password is required';
-      } else if (formData.password && formData.password.length < 6) {
-        errors.password = 'Password must be at least 6 characters';
-      }
-    }
-    
-    if (name === 'confirmPassword' || name === 'all') {
-      if (!formData.confirmPassword && name === 'all') {
-        errors.confirmPassword = 'Please confirm your password';
-      } else if (formData.confirmPassword && formData.password !== formData.confirmPassword) {
-        errors.confirmPassword = 'Passwords do not match';
-      }
-    }
-    
-    if (name === 'phone' || name === 'all') {
-      if (!formData.phone && name === 'all') {
-        errors.phone = 'Phone number is required';
-      } else if (formData.phone && !validatePhone(formData.phone)) {
-        errors.phone = 'Use format: +[country_code][9+ digits] e.g., +254723456789';
-      }
-    }
-    
-    return errors;
-  };
-
   const handleChange = (e) => {
     const { name, value } = e.target;
+    
     setFormData((prev) => ({
       ...prev,
       [name]: value,
     }));
     
+    // validation for the field updates
+    const fieldError = validateFieldValue(name, value, { ...formData, [name]: value });
     const newErrors = { ...fieldErrors };
-    const fieldValidation = validateField(name, value);
-    if (fieldValidation[name]) {
-      newErrors[name] = fieldValidation[name];
+    
+    if (fieldError) {
+      newErrors[name] = fieldError;
     } else {
       delete newErrors[name];
     }
+    
     setFieldErrors(newErrors);
     setError('');
   };
@@ -94,7 +141,13 @@ export default function Signup({ onSignup, onSwitchToLogin }) {
     e.preventDefault();
     setError('');
     
-    const validationErrors = validateField('all');
+    // Validate all fields
+    const validationErrors = validateForm(formData);
+
+    const getByteLength = (str) => new TextEncoder().encode(str).length;
+    if (getByteLength(formData.password) > 72) {
+        validationErrors.password = 'Password is too long.';
+    }
     setFieldErrors(validationErrors);
 
     if (Object.keys(validationErrors).length > 0) {
@@ -106,10 +159,10 @@ export default function Signup({ onSignup, onSwitchToLogin }) {
 
     try {
       const response = await authAPI.signup({
-        full_name: formData.name,
+        name: formData.name,
         email: formData.email,
         password: formData.password,
-        phone_number: formData.phone,
+        phone: formData.phone,
       });
 
       onSignup({
@@ -128,32 +181,33 @@ export default function Signup({ onSignup, onSwitchToLogin }) {
         phone: '',
       });
     } catch (err) {
-      // Parse error message for user-friendly display
+      // error message for user-friendly display
       let userMessage = 'Failed to create account. Please try again.';
-      let fieldErrors = {};
+      let fieldErrorsFromAPI = {};
 
-      // Check if error message contains specific validation errors
-      if (err.message.includes('already')) {
-        userMessage = 'Email already registered';
-        fieldErrors.email = 'This email is already in use';
-      } else if (err.message.includes('phone')) {
-        userMessage = 'Phone number format is invalid';
-        fieldErrors.phone = 'Use format: +[country_code][9+ digits] (e.g., +254723456789)';
-      } else if (err.message.includes('email')) {
-        userMessage = 'Email format is invalid';
-        fieldErrors.email = 'Please enter a valid email address';
-      } else if (err.message.includes('password')) {
-        userMessage = 'Password does not meet requirements';
-        fieldErrors.password = 'Password must be at least 6 characters';
-      } else if (err.message.includes('name') || err.message.includes('full_name')) {
-        userMessage = 'Name is invalid';
-        fieldErrors.name = 'Name must be between 2-100 characters';
-      } else {
-        userMessage = err.message || userMessage;
+      console.error('Signup error details:', err.message); // Log for debugging
+
+      // Backend Error Mapping
+      const errorMap = {
+        'already': { message: 'Email already registered', field: 'email', detail: 'This email is already in use' },
+        'phone': { message: 'Phone number format is invalid', field: 'phone', detail: 'Use format: +[country_code][9+ digits] (e.g., +254723456789)' },
+        'email': { message: 'Email format is invalid', field: 'email', detail: 'Please enter a valid email address' },
+        'password': { message: 'Password is too long', field: 'password', detail: 'Password must not exceed 72 characters' },
+        'name': { message: 'Name is invalid', field: 'name', detail: 'Please check your name' },
+      };
+
+      for (const [key, errorInfo] of Object.entries(errorMap)) {
+        if (err.message.toLowerCase().includes(key)) {
+          userMessage = errorInfo.message;
+          fieldErrorsFromAPI[errorInfo.field] = errorInfo.detail;
+          break;
+        }
       }
 
       setError(userMessage);
-      setFieldErrors({ ...fieldErrors });
+      if (Object.keys(fieldErrorsFromAPI).length > 0) {
+        setFieldErrors(fieldErrorsFromAPI);
+      }
     } finally {
       setLoading(false);
     }

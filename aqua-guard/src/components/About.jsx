@@ -1,9 +1,9 @@
 import Navigation from './Navigation';
 
-export default function About({ onNavigate }) {
+export default function About({ onNavigate, user }) {
   return (
     <div>
-      <Navigation currentPage="about" onNavigate={onNavigate} />
+      <Navigation currentPage="about" onNavigate={onNavigate} user={user}/>
 
       <main className='about-container'>
         {/* About Section */}

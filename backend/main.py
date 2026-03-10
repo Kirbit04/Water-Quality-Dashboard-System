@@ -21,7 +21,7 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifespan context manager for startup and shutdown events"""
+    #Lifespan context manager for startup and shutdown events
     # Startup
     logger.info(" Starting FastAPI application...")
     
@@ -54,9 +54,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     description="Water Quality Dashboard System - FastAPI backend with MySQL",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    lifespan=lifespan
+    version="1.0.0",
 )
 
 # Configure CORS

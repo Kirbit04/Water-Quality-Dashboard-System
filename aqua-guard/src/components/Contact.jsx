@@ -2,7 +2,7 @@ import { useState } from 'react';
 import Navigation from './Navigation';
 import { contactAPI } from '../api';
 
-export default function Contact({ onNavigate }) {
+export default function Contact({ onNavigate, user }) {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -14,38 +14,39 @@ export default function Contact({ onNavigate }) {
   const [error, setError] = useState('');
 
   const validateEmail = (email) => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    return email.includes('@') && email.endsWith('gmail.com');
   };
 
   const validateField = (name, value) => {
-    const errors = {};
-    
-    if (name === 'name' || name === 'all') {
-      if (!formData.name && name === 'all') {
-        errors.name = 'Name is required';
-      } else if (formData.name && formData.name.trim().length < 2) {
-        errors.name = 'Name must be at least 2 characters';
-      }
+  const errors = {};
+  const vals = name === 'all' ? formData : { ...formData, [name]: value };
+
+  if (name === 'name' || name === 'all') {
+    if (!vals.name) {
+      errors.name = 'Name is required';
+    } else if (vals.name.trim().length < 2) {
+      errors.name = 'Name must be at least 2 characters';
     }
-    
-    if (name === 'email' || name === 'all') {
-      if (!formData.email && name === 'all') {
-        errors.email = 'Email is required';
-      } else if (formData.email && !validateEmail(formData.email)) {
-        errors.email = 'Please enter a valid email address';
-      }
+  }
+
+  if (name === 'email' || name === 'all') {
+    if (!vals.email) {
+      errors.email = 'Email is required';
+    } else if (!validateEmail(vals.email)) {
+      errors.email = 'Please enter a valid email address';
     }
-    
-    if (name === 'message' || name === 'all') {
-      if (!formData.message && name === 'all') {
-        errors.message = 'Message is required';
-      } else if (formData.message && formData.message.trim().length < 10) {
-        errors.message = 'Message must be at least 10 characters';
-      }
+  }
+
+  if (name === 'message' || name === 'all') {
+    if (!vals.message) {
+      errors.message = 'Message is required';
+    } else if (vals.message.trim().length < 10) {
+      errors.message = 'Message must be at least 10 characters';
     }
-    
-    return errors;
-  };
+  }
+
+  return errors;
+};
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -97,7 +98,8 @@ export default function Contact({ onNavigate }) {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f5f7fa' }}>
-      <Navigation currentPage="contact" onNavigate={onNavigate} />
+      <Navigation currentPage="contact" onNavigate={onNavigate} user={user} />
+      {console.log('user passed to nav:', user)}
 
       <main className="contact-container">
         <h1 className="contact-title">

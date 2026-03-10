@@ -12,24 +12,11 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 
 class UserController:
-    """Controller class for user endpoints following OOP principles"""
 
     def __init__(self, service: UserService):
         self.service = service
 
     async def signup(self, user_data: UserCreate) -> UserResponse:
-        """
-        Register a new user (signup endpoint)
-        
-        Args:
-            user_data: UserCreate schema with user information
-            
-        Returns:
-            UserResponse with created user details
-            
-        Raises:
-            HTTPException if signup fails
-        """
         try:
             # Create user via service
             created_user = self.service.create_user(user_data)
@@ -43,15 +30,7 @@ class UserController:
 
             logger.info(f"User signed up successfully: {created_user.email}")
 
-            return UserResponse(
-                id=created_user.id,
-                email=created_user.email,
-                full_name=created_user.full_name,
-                phone_number=created_user.phone_number,
-                is_active=created_user.is_active,
-                created_at=created_user.created_at,
-                updated_at=created_user.updated_at
-            )
+            return UserResponse.model_validate(created_user, from_attributes=True)
 
         except ValueError as e:
             logger.warning(f"Validation error during signup: {str(e)}")
@@ -68,12 +47,7 @@ class UserController:
 
 
 def get_user_service() -> UserService:
-    """
-    Dependency injection for UserService
-    
-    Returns:
-        UserService instance with database and settings
-    """
+
     db = get_db_instance()
     settings = get_settings()
     return UserService(db, settings)
@@ -85,17 +59,6 @@ async def signup(
     user_data: UserCreate,
     service: UserService = Depends(get_user_service)
 ) -> UserResponse:
-    """
-    User signup endpoint
-    
-    **Request body:**
-    - **email**: Valid email address
-    - **password**: Password (minimum 6 characters)
-    - **full_name**: Optional full name
-    - **phone_number**: Optional phone number
-    
-    **Returns:** UserResponse with created user details
-    """
     controller = UserController(service)
     return await controller.signup(user_data)
 
@@ -105,11 +68,7 @@ async def get_current_user(
     user_id: int,
     service: UserService = Depends(get_user_service)
 ) -> UserResponse:
-    """
-    Get current user profile
     
-    Returns: UserResponse with user details
-    """
     user = service.get_user_by_id(user_id)
 
     if not user:
@@ -118,12 +77,4 @@ async def get_current_user(
             detail="User not found"
         )
 
-    return UserResponse(
-        id=user.id,
-        email=user.email,
-        full_name=user.full_name,
-        phone_number=user.phone_number,
-        is_active=user.is_active,
-        created_at=user.created_at,
-        updated_at=user.updated_at
-    )
+    return UserResponse.model_validate(user, from_attributes=True)

@@ -1,11 +1,12 @@
 from typing import Optional, List
-from passlib.context import CryptContext
-from datetime import datetime, timedelta
+import bcrypt
+from datetime import datetime, timedelta, timezone
 import jwt
 import logging
+import time
 
 from ..domain.model import User
-from ..domain.schemas import UserCreate, UserUpdate, Token
+from ..domain.schemas import UserCreate, UserUpdate
 from ..services.repository import UserRepository
 from ..core.database import Database
 from ..core.settings import Settings
@@ -14,22 +15,23 @@ logger = logging.getLogger(__name__)
 
 
 class PasswordService:
-    """Service for password hashing and verification"""
-    
-    def __init__(self):
-        self.pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    
+    #Service for password hashing and verification using
     def hash_password(self, password: str) -> str:
-        """Hash a password"""
-        return self.pwd_context.hash(password)
-    
+        # Hash a password
+        salt = bcrypt.gensalt(rounds=12)
+        hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
+        return hashed.decode("utf-8")
+
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
-        """Verify a password against its hash"""
-        return self.pwd_context.verify(plain_password, hashed_password)
+        # Verify a password against its hash
+        return bcrypt.checkpw(
+            plain_password.encode("utf-8"),
+            hashed_password.encode("utf-8")
+        )
 
 
 class TokenService:
-    """Service for JWT token generation and verification"""
+    #Service for JWT token generation and verification
     
     def __init__(self, settings: Settings):
         self.settings = settings
@@ -38,20 +40,20 @@ class TokenService:
         self.access_token_expire_minutes = settings.ACCESS_TOKEN_EXPIRE_MINUTES
     
     def create_access_token(self, data: dict, expires_delta: Optional[timedelta] = None) -> str:
-        """Create JWT access token"""
+        #Create JWT access token
         to_encode = data.copy()
         
         if expires_delta:
-            expire = datetime.utcnow() + expires_delta
+            expire = datetime.now(timezone.utc) + expires_delta
         else:
-            expire = datetime.utcnow() + timedelta(minutes=self.access_token_expire_minutes)
+            expire = datetime.now(timezone.utc) + timedelta(minutes=self.access_token_expire_minutes)
         
         to_encode.update({"exp": expire})
         encoded_jwt = jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
         return encoded_jwt
     
     def decode_token(self, token: str) -> Optional[dict]:
-        """Decode and verify JWT token"""
+        #Decode and verify JWT token
         try:
             payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
             return payload
@@ -61,7 +63,7 @@ class TokenService:
 
 
 class UserService:
-    """Service class for user-related business logic"""
+    #Service class for user-related business logic
     
     def __init__(self, database: Database, settings: Settings):
         self.repository = UserRepository(database)
@@ -70,31 +72,25 @@ class UserService:
         self.settings = settings
     
     def create_user(self, user_data: UserCreate) -> Optional[User]:
-        """
-        Create a new user
-        
-        Args:
-            user_data: UserCreate schema with user information
-            
-        Returns:
-            Created User object if successful, None otherwise
-        """
         # Check if email already exists
         if self.repository.exists_by_email(user_data.email):
             logger.warning(f"Email already exists: {user_data.email}")
             raise ValueError("Email already exists")
         
         # Hash password
+        start_time = time.time()
         hashed_password = self.password_service.hash_password(user_data.password)
+        password_hash_time = time.time() - start_time
+        logger.info(f"Password hashing time: {password_hash_time:.4f} seconds")
         
         # Create user object
         user = User(
             email=user_data.email,
-            full_name=user_data.full_name,
-            phone_number=user_data.phone_number,
+            name=user_data.name,
+            phone=user_data.phone,
             hashed_password=hashed_password,
             is_active=True,
-            is_superuser=False
+            role=user_data.role
         )
         
         # Save to database
@@ -106,25 +102,16 @@ class UserService:
         return created_user
     
     def authenticate_user(self, email: str, password: str) -> Optional[User]:
-        """
-        Authenticate user with email and password
-        
-        Args:
-            email: User email
-            password: Plain password
-            
-        Returns:
-            User object if authenticated, None otherwise
-        """
         user = self.repository.get_by_email(email)
         
         if not user:
             logger.warning(f"User not found: {email}")
             return None
-        
+        start = time.time()
         if not self.password_service.verify_password(password, user.hashed_password):
             logger.warning(f"Invalid password for user: {email}")
             return None
+        print(f"Password verification time: {time.time() - start:.4f} seconds")
         
         if not user.is_active:
             logger.warning(f"Inactive user attempted login: {email}")
@@ -133,52 +120,30 @@ class UserService:
         logger.info(f" User authenticated: {email}")
         return user
     
-    def create_token_for_user(self, user: User) -> Token:
-        """
-        Create access token for user
-        
-        Args:
-            user: User object
-            
-        Returns:
-            Token schema with access token
-        """
+    def create_token_for_user(self, user: User) -> str:
+
         access_token_expires = timedelta(minutes=self.settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         
-        access_token = self.token_service.create_access_token(
+        return self.token_service.create_access_token(
             data={"sub": user.email, "user_id": user.id},
             expires_delta=access_token_expires
         )
-        
-        return Token(
-            access_token=access_token,
-            token_type="bearer",
-            expires_in=self.settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
-        )
+
     
-    def get_user_by_id(self, user_id: int) -> Optional[User]:
-        """Get user by ID"""
-        return self.repository.get_by_id(user_id)
+    def get_user_by_id(self, id: int) -> Optional[User]:
+        #Get user by ID
+        return self.repository.get_by_id(id)
     
     def get_user_by_email(self, email: str) -> Optional[User]:
-        """Get user by email"""
+        #Get user by email
         return self.repository.get_by_email(email)
     
     def get_all_users(self, skip: int = 0, limit: int = 100) -> List[User]:
-        """Get all users with pagination"""
+        #Get all users with pagination
         return self.repository.get_all(skip=skip, limit=limit)
     
     def update_user(self, user_id: int, user_data: UserUpdate) -> Optional[User]:
-        """
-        Update user information
-        
-        Args:
-            user_id: User ID
-            user_data: UserUpdate schema with fields to update
-            
-        Returns:
-            Updated User object if successful, None otherwise
-        """
+
         update_data = user_data.model_dump(exclude_unset=True)
         
         # Hash password if provided
@@ -195,19 +160,11 @@ class UserService:
         return updated_user
     
     def delete_user(self, user_id: int) -> bool:
-        """Delete user"""
+        #Delete user
         return self.repository.delete(user_id)
     
     def verify_token(self, token: str) -> Optional[User]:
-        """
-        Verify token and return user
-        
-        Args:
-            token: JWT token
-            
-        Returns:
-            User object if token is valid, None otherwise
-        """
+       
         payload = self.token_service.decode_token(token)
         
         if not payload:

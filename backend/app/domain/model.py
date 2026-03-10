@@ -5,69 +5,68 @@ from dataclasses import dataclass, field
 
 @dataclass
 class User:
-    #User model for a user entity in the database
     
     id: Optional[int] = None
     email: str = ""
-    full_name: Optional[str] = None    
-    phone_number: Optional[str] = None    
+    name: Optional[str] = None    
+    phone: Optional[str] = None    
     hashed_password: str = ""
     is_active: bool = True
-    is_superuser: bool = False
+    role: str = ""
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     
     def __post_init__(self):
-        """Post initialization processing"""
+        #Post initialization processing
         if self.created_at is None:
             self.created_at = datetime.now()
         if self.updated_at is None:
             self.updated_at = datetime.now()
     
     def to_dict(self) -> Dict[str, Any]:
-        """Convert user object to dictionary"""
+        #Convert user object to dictionary
         return {
             "id": self.id,
             "email": self.email,
-            "full_name": self.full_name,
-            "phone_number": self.phone_number,
+            "name": self.name,
+            "phone": self.phone,
             "hashed_password": self.hashed_password,
             "is_active": self.is_active,
-            "is_superuser": self.is_superuser,
+            "role": self.role,
             "created_at": self.created_at,
             "updated_at": self.updated_at
         }
     
     def to_response_dict(self) -> Dict[str, Any]:
-        """Convert user object to dictionary without sensitive data"""
+        #Convert user object to dictionary without sensitive data
         return {
             "id": self.id,
             "email": self.email,
-            "full_name": self.full_name,
-            "phone_number": self.phone_number,
+            "name": self.name,
+            "phone": self.phone,
             "is_active": self.is_active,
-            "is_superuser": self.is_superuser,
+            "role": self.role,
             "created_at": self.created_at,
             "updated_at": self.updated_at
         }
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'User':
-        """Create User instance from dictionary"""
+        #Create User instance from dictionary
         return cls(
-            id=data.get('id'),
+            id=data.get('id') or data.get('user_id'),
             email=data.get('email', ''),
-            full_name=data.get('full_name'),
-            phone_number=data.get('phone_number'),
+            name=data.get('name'),
+            phone=data.get('phone'),
             hashed_password=data.get('hashed_password', ''),
             is_active=data.get('is_active', True),
-            is_superuser=data.get('is_superuser', False),
+            role=data.get('role'),
             created_at=data.get('created_at'),
             updated_at=data.get('updated_at')
         )
     
     def is_authenticated(self) -> bool:
-        """Check if user is authenticated (has an ID)"""
+        #Check if user is authenticated using ID
         return self.id is not None
     
     def __repr__(self) -> str:
@@ -79,12 +78,12 @@ class User:
 
 @dataclass
 class LabTest:
-    """Lab test model representing water quality test results"""
+    #Lab test model representing water quality test results
     
     id: Optional[int] = None
     user_id: int = 0
     occupation: str = ""
-    location: str = ""
+    location_id: int = 0
     date_of_test: Optional[datetime] = None
     ph: float = 0.0
     turbidity: float = 0.0
@@ -96,19 +95,19 @@ class LabTest:
     updated_at: Optional[datetime] = None
     
     def __post_init__(self):
-        """Post initialization processing"""
+        #Post initialization processing
         if self.created_at is None:
             self.created_at = datetime.now()
         if self.updated_at is None:
             self.updated_at = datetime.now()
     
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary"""
+        #Convert to dictionary
         return {
             "id": self.id,
             "user_id": self.user_id,
             "occupation": self.occupation,
-            "location": self.location,
+            "location_id": self.location_id,
             "date_of_test": self.date_of_test,
             "ph": self.ph,
             "turbidity": self.turbidity,
@@ -122,12 +121,12 @@ class LabTest:
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'LabTest':
-        """Create instance from dictionary"""
+        #Create instance from dictionary
         return cls(
             id=data.get('id'),
             user_id=data.get('user_id', 0),
             occupation=data.get('occupation', ''),
-            location=data.get('location', ''),
+            location_id=data.get('location_id', ''),
             date_of_test=data.get('date_of_test'),
             ph=float(data.get('ph', 0)),
             turbidity=float(data.get('turbidity', 0)),
@@ -140,15 +139,15 @@ class LabTest:
         )
     
     def __repr__(self) -> str:
-        return f"<LabTest(id={self.id}, user_id={self.user_id}, location='{self.location}')>"
+        return f"<LabTest(id={self.id}, user_id={self.user_id}, location='{self.location_id}')>"
     
     def __str__(self) -> str:
-        return f"LabTest: {self.location} ({self.date_of_test})"
+        return f"LabTest: {self.location_id} ({self.date_of_test})"
 
 
 @dataclass
 class ContactMessage:
-    """Contact message model for user inquiries"""
+    #Contact message model for user inquiries
     
     id: Optional[int] = None
     name: str = ""
@@ -159,14 +158,14 @@ class ContactMessage:
     updated_at: Optional[datetime] = None
     
     def __post_init__(self):
-        """Post initialization processing"""
+        #Post initialization processing
         if self.created_at is None:
             self.created_at = datetime.now()
         if self.updated_at is None:
             self.updated_at = datetime.now()
     
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary"""
+        #Convert to dictionary
         return {
             "id": self.id,
             "name": self.name,
@@ -179,7 +178,7 @@ class ContactMessage:
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'ContactMessage':
-        """Create instance from dictionary"""
+        #Create instance from dictionary
         return cls(
             id=data.get('id'),
             name=data.get('name', ''),

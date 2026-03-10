@@ -6,6 +6,7 @@ export const apiCall = async (endpoint, options = {}) => {
   
   try {
     const response = await fetch(url, {
+      credentials: 'include', // Includes cookies for authentication
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
@@ -41,17 +42,18 @@ export const authAPI = {
       method: 'POST',
       body: JSON.stringify({
         email: userData.email,
-        full_name: userData.full_name || '',
-        phone_number: userData.phone_number || '',
+        name: userData.name || '',
+        phone: userData.phone || '',
         password: userData.password,
+        role: userData.role || 'user',
       }),
     });
   },
 
-  login: async (email, password) => {
+  login: async (email, password, role) => {
     return apiCall('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, role }),
     });
   },
 
@@ -69,12 +71,12 @@ export const labTestAPI = {
       method: 'POST',
       body: JSON.stringify({
         occupation: testData.occupation,
-        location: testData.location,
-        date_of_test: testData.dateOfTest,
+        location_id: parseInt(testData.location_id),
+        date_of_test: testData.date_of_test,
         ph: parseFloat(testData.ph),
         turbidity: parseFloat(testData.turbidity),
         salinity: parseFloat(testData.salinity),
-        dissolved_oxygen: parseFloat(testData.dissolvedOxygen),
+        dissolved_oxygen: parseFloat(testData.dissolved_oxygen),
         nitrates: parseFloat(testData.nitrates),
         phosphates: parseFloat(testData.phosphates),
       }),
@@ -170,13 +172,6 @@ export const userAPI = {
   getProfile: async (userId) => {
     return apiCall(`/users/me?user_id=${userId}`, {
       method: 'GET',
-    });
-  },
-
-  updateProfile: async (userId, userData) => {
-    return apiCall(`/users/${userId}`, {
-      method: 'PATCH',
-      body: JSON.stringify(userData),
     });
   },
 };

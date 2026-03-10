@@ -56,11 +56,11 @@ class Database:
         CREATE TABLE IF NOT EXISTS users (
             id INT AUTO_INCREMENT PRIMARY KEY,
             email VARCHAR(100) UNIQUE NOT NULL,
-            full_name VARCHAR(100),
-            phone_number VARCHAR(20),
+            name VARCHAR(100),
+            phone VARCHAR(20),
             hashed_password VARCHAR(255) NOT NULL,
             is_active BOOLEAN DEFAULT TRUE,
-            is_superuser BOOLEAN DEFAULT FALSE,
+            role VARCHAR(50) DEFAULT 'user',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             INDEX idx_email (email)
@@ -72,7 +72,7 @@ class Database:
             id INT AUTO_INCREMENT PRIMARY KEY,
             user_id INT NOT NULL,
             occupation VARCHAR(100),
-            location VARCHAR(100),
+            location_id INT NOT NULL,
             date_of_test DATETIME,
             ph DECIMAL(5, 2),
             turbidity DECIMAL(8, 2),

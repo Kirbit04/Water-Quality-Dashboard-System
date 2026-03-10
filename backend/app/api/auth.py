@@ -1,7 +1,7 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Response, Cookie
 import logging
 
-from ..domain.schemas import UserLogin, Token, UserResponse
+from ..domain.schemas import UserLogin, UserResponse
 from ..services.service import UserService
 from ..core.database import get_db_instance
 from ..core.settings import get_settings
@@ -12,24 +12,12 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 class AuthController:
-    """Controller class for authentication endpoints following OOP principles"""
 
     def __init__(self, service: UserService):
         self.service = service
 
-    async def login(self, credentials: UserLogin) -> Token:
-        """
-        Authenticate user and return access token
-        
-        Args:
-            credentials: UserLogin schema with email and password
-            
-        Returns:
-            Token schema with access token and metadata
-            
-        Raises:
-            HTTPException if authentication fails
-        """
+    async def login(self, credentials: UserLogin, response: Response) -> UserResponse:
+
         try:
             # Authenticate user
             user = self.service.authenticate_user(
@@ -45,13 +33,22 @@ class AuthController:
                     headers={"WWW-Authenticate": "Bearer"}
                 )
 
-            # Generate token
+            # Generate token and set as HTTP-only cookie
             token = self.service.create_token_for_user(user)
+            response.set_cookie(
+                key="authToken",
+                value=token,
+                httponly=True,
+                secure=False,    
+                samesite="lax",
+                max_age=86400    #seconds
+            )
 
             logger.info(f"User logged in successfully: {user.email}")
 
-            return token
-
+            #return user details
+            return UserResponse.model_validate(user, from_attributes=True)
+        
         except HTTPException:
             raise
         except Exception as e:
@@ -61,21 +58,16 @@ class AuthController:
                 detail="An error occurred during login"
             )
 
-    async def get_profile(self, user_id: int) -> UserResponse:
-        """
-        Get authenticated user profile
-        
-        Args:
-            user_id: User ID from token
-            
-        Returns:
-            UserResponse with user details
-            
-        Raises:
-            HTTPException if user not found
-        """
+    async def get_profile(self, auth_token: str) -> UserResponse:
+
         try:
-            user = self.service.get_user_by_id(user_id)
+            if not auth_token:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Not authenticated"
+                )
+            
+            user = self.service.verify_token(auth_token)
 
             if not user:
                 raise HTTPException(
@@ -83,15 +75,7 @@ class AuthController:
                     detail="User not found"
                 )
 
-            return UserResponse(
-                id=user.id,
-                email=user.email,
-                full_name=user.full_name,
-                phone_number=user.phone_number,
-                is_active=user.is_active,
-                created_at=user.created_at,
-                updated_at=user.updated_at
-            )
+            return UserResponse.model_validate(user, from_attributes=True)
 
         except HTTPException:
             raise
@@ -101,80 +85,64 @@ class AuthController:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="An error occurred while fetching profile"
             )
-
+        
+    async def logout(self, response: Response):
+        try:
+            response.delete_cookie(key="authToken")
+            return {"message": "Logged out successfully"}
+        except Exception as e:
+            logger.error(f"Logout error: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="An error occurred during logout"
+            )
 
 def get_user_service() -> UserService:
-    """
-    Dependency injection for UserService
-    
-    Returns:
-        UserService instance with database and settings
-    """
+
     db = get_db_instance()
     settings = get_settings()
     return UserService(db, settings)
 
 
 # Route endpoints
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=UserResponse)
 async def login(
     credentials: UserLogin,
+    response: Response,
     service: UserService = Depends(get_user_service)
-) -> Token:
-    """
-    User login endpoint
-    
-    **Request body:**
-    - **email**: Valid email address
-    - **password**: User password
-    
-    **Returns:** Token with access_token, token_type, and expires_in
-    
-    **Example response:**
-    ```json
-    {
-        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-        "token_type": "bearer",
-        "expires_in": 1800
-    }
-    ```
-    """
+) -> UserResponse:
     controller = AuthController(service)
-    return await controller.login(credentials)
+    return await controller.login(credentials, response)
 
 
 @router.get("/profile", response_model=UserResponse)
 async def get_profile(
-    user_id: int,
+    authToken: str = Cookie(None),
     service: UserService = Depends(get_user_service)
 ) -> UserResponse:
-    """
-    Get authenticated user profile
-    
-    **Query Parameters:**
-    - **user_id**: User ID (from JWT token claims)
-    
-    **Returns:** UserResponse with user profile details
-    """
     controller = AuthController(service)
-    return await controller.get_profile(user_id)
+    return await controller.get_profile(authToken)
+
+
+
+@router.post("/logout")
+async def logout(response: Response):
+    response.delete_cookie("authToken")
+    return {"message": "Logged out successfully"}
 
 
 @router.post("/verify-token")
 async def verify_token(
-    token: str,
+    authToken: str = Cookie(None),
     service: UserService = Depends(get_user_service)
 ):
-    """
-    Verify JWT token validity
-    
-    **Query Parameters:**
-    - **token**: JWT access token
-    
-    **Returns:** User information if token is valid
-    """
     try:
-        user = service.verify_token(token)
+        if not authToken:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated"
+            )
+        user = service.verify_token(authToken)
 
         if not user:
             raise HTTPException(
@@ -186,7 +154,8 @@ async def verify_token(
             "valid": True,
             "user_id": user.id,
             "email": user.email,
-            "full_name": user.full_name
+            "name": user.name,
+            "role": user.role
         }
 
     except Exception as e:

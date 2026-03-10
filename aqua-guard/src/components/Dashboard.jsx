@@ -1,3 +1,4 @@
+import { userAPI } from '../api';
 import Navigation from './Navigation';
 
 const mockData = {
@@ -19,7 +20,7 @@ const StatusBadge = ({ status }) => {
   };
 
   return (
-    <span className= {"kpi-badge ${statusColors[status]}" }>
+    <span className= {'kpi-badge ' + statusColors[status]}>
       {status}
     </span>
   );
@@ -28,12 +29,13 @@ const StatusBadge = ({ status }) => {
 export default function Dashboard({ user, onNavigate }) {
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f5f7fa' }}>
-      <Navigation currentPage="dashboard" onNavigate={onNavigate} />
+      <Navigation currentPage="dashboard" onNavigate={onNavigate} user={user} />
 
       <main className="dashboard-container">
         {/* Welcome Section */}
         <div className="welcome-section">
           <h1 className="welcome-title">Welcome to AquaGuard, {user.name}!</h1>
+          
           <p className="welcome-subtitle">
             Your comprehensive overview of water quality. Monitor key parameters and receive
             actionable recommendations to maintain a healthy environment.
@@ -42,7 +44,7 @@ export default function Dashboard({ user, onNavigate }) {
             onClick={() => onNavigate('labtest')}
             className="welcome-button"
           >
-            <span>⬆ Upload New Lab Test</span>
+            <span>Upload New Lab Test</span>
           </button>
         </div>
 
