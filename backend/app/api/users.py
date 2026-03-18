@@ -5,6 +5,7 @@ from ..domain.schemas import UserCreate, UserResponse
 from ..services.service import UserService
 from ..core.database import get_db_instance
 from ..core.settings import get_settings
+from ..core.settings import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -64,12 +65,12 @@ async def signup(
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_current_user(
-    user_id: int,
+async def get_current_user_profile(
+    current_user: dict = Depends(get_current_user),
     service: UserService = Depends(get_user_service)
 ) -> UserResponse:
     
-    user = service.get_user_by_id(user_id)
+    user = service.get_user_by_id(current_user["id"])
 
     if not user:
         raise HTTPException(

@@ -8,6 +8,7 @@ const Validation_rules = {
     required: true,
     minLength: 2,
     maxLength: 100,
+    validate: (value) => /^[A-Za-z\s\-']+$/.test(value.trim()),
     errorMessages: {
       required: 'Name is required',
       minLength: 'Name must be at least 2 characters',

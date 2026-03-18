@@ -39,6 +39,18 @@ class UserCreate(UserBase):
     phone: Optional[str] = Field(None, max_length=20, description="Phone number")
     role: str = Field(..., description="User role (e.g., 'user', 'admin')")
 
+    @field_validator('name')
+    @classmethod
+    def validate_name(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError('Name cannot be empty.')
+        if len(v) < 2:
+            raise ValueError('Name must be at least 2 characters.')
+        if not re.match(r"^[A-Za-z\s\-']+$", v):
+            raise ValueError('Name can only contain letters, spaces, hyphens, and apostrophes.')
+        return v.title()
+
     @field_validator('password')
     @classmethod
     def validate_password_bytes(cls, v):

@@ -122,8 +122,6 @@ export default function Login({ onLogin, onSwitchToSignup }) {
         email: response.email,
         role: response.role || formData.role,
       });
-      console.log('User role:', formData.role);
-      console.log('Token:', response.token)
 
     } catch (err) {
       // Backend Error Mapping

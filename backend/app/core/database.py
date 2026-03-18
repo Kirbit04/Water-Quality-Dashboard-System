@@ -31,7 +31,7 @@ class Database:
         cursor = None
         try:
             conn = self._get_connection()
-            cursor = conn.cursor(dictionary=dictionary)
+            cursor = conn.cursor(dictionary=dictionary, buffered=True)
             yield cursor
             conn.commit()
         except Error as e:
@@ -101,6 +101,30 @@ class Database:
             INDEX idx_created_at (created_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         """
+        create_recommendations_table = """
+        CREATE TABLE IF NOT EXISTS recommendations (
+            recommendation_id   INT AUTO_INCREMENT PRIMARY KEY,
+            result_id           INT NOT NULL,
+            recommendation_text TEXT,
+            recommendation_type VARCHAR(50),
+            severity_level      VARCHAR(30),
+            generated_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (result_id) REFERENCES model_results(result_id) ON DELETE CASCADE
+        );
+        """
+
+        create_model_results_table = """
+        CREATE TABLE IF NOT EXISTS model_results (
+            result_id   INT AUTO_INCREMENT PRIMARY KEY,
+            test_id     INT NOT NULL,
+            wqi_score   FLOAT,
+            health_score FLOAT,
+            risk_level  VARCHAR(30),
+            ml_confidence FLOAT,
+            analysis_date DATETIME,
+            FOREIGN KEY (test_id) REFERENCES lab_tests(id) ON DELETE CASCADE
+        );
+        """
         
         try:
             with self.get_cursor() as cursor:
@@ -112,6 +136,12 @@ class Database:
                 
                 cursor.execute(create_contact_messages_table)
                 logger.info("Database contact_messages table created/verified")
+
+                cursor.execute(create_recommendations_table)
+                logger.info("Database recommendations table created/verified")
+
+                cursor.execute(create_model_results_table)
+                logger.info("Database model_results table created/verified")
         except Error as e:
             logger.error(f"Error creating tables: {e}")
             raise

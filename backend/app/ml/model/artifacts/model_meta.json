@@ -1,0 +1,35 @@
+{
+  "features": [
+    "ph",
+    "turbidity",
+    "dissolved_oxygen",
+    "nitrates",
+    "phosphates",
+    "salinity"
+  ],
+  "label_names": {
+    "0": "High Risk",
+    "1": "Low Risk",
+    "2": "Moderate Risk"
+  },
+  "feature_importances": {
+    "ph": 0.1571920081099235,
+    "turbidity": 0.0,
+    "dissolved_oxygen": 0.22381909941525216,
+    "nitrates": 0.13025034820362397,
+    "phosphates": 0.3428588693969427,
+    "salinity": 0.14587967487425768
+  },
+  "cv_accuracy": 0.8788306451612904,
+  "cv_std": 0.05431737485591781,
+  "n_samples": 157,
+  "who_limits": {
+    "ph": 8.5,
+    "turbidity": 4.0,
+    "dissolved_oxygen": 14.6,
+    "nitrates": 50.0,
+    "phosphates": 0.1,
+    "salinity": 1500
+  },
+  "turbidity_note": "Turbidity is accepted from frontend at inference but set to 0.0 during training (not in dataset)."
+}

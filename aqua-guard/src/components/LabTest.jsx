@@ -105,6 +105,19 @@ export default function LabTest({ user, onNavigate }) {
         userId: user?.id,
       });
 
+      const testId = response.id || response.test_id;   
+      console.log('Lab test submitted with ID:', testId);
+      if (testId) {
+        try {
+          setSubmitMessage('Analysis water quality...');
+          await labTestAPI.processTest(testId);
+          setSubmitMessage('Analysis complete! loading results...');
+        } catch (processErr) {
+          console.warn('Recommendation pipeline trigger failed:', processErr.message);
+          setSubmitMessage('Lab test submitted! Recommendations will be available shortly.');
+        }
+      }
+
       setSubmitMessage('Lab test submitted successfully!');
       setFormData({
         occupation: '',

@@ -100,6 +100,18 @@ export const labTestAPI = {
       method: 'GET',
     });
   },
+
+  processTest: async (testId) => {
+    return apiCall(`/recommendations/lab-test/${testId}/process/sync`, {
+      method: 'POST',
+    });
+  },
+  
+  getResults: async (testId) => {
+    return apiCall(`/recommendations/lab-test/${testId}/results`, {
+    method: 'GET',
+    });
+  },
 };
 
 // Contact APIs

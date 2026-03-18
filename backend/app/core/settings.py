@@ -1,5 +1,7 @@
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+from fastapi import Depends, HTTPException, Request
+from jose import jwt, JWTError
 
 
 class Settings(BaseSettings):
@@ -36,6 +38,31 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     RELOAD: bool = True
+
+    # Authentication dependency to get current user from JWT token
+    async def get_current_user(self, request: Request) -> dict:
+        token = request.cookies.get("authToken")
+
+        if not token:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+
+        try:
+            payload = jwt.decode(
+                token,
+                self.SECRET_KEY,
+                algorithms=[self.ALGORITHM]
+            )
+
+            user_id: int = payload.get("user_id")
+            email: str   = payload.get("sub")
+
+            if user_id is None:
+                raise HTTPException(status_code=401, detail="Invalid token")
+
+            return {"id": user_id, "email": email}
+
+        except JWTError:
+            raise HTTPException(status_code=401, detail="Invalid or expired token.")
     
     class Config:
         env_file = ".env"
@@ -45,3 +72,6 @@ class Settings(BaseSettings):
 @lru_cache()
 def get_settings() -> Settings:
     return Settings()
+
+async def get_current_user(request: Request) -> dict:
+    return await get_settings().get_current_user(request)

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from app.core.settings import get_settings
 from app.core.database import get_db_instance
-from app.api import auth, users, lab_test, contact
+from app.api import auth, users, lab_test, contact, recommendations
 
 # Configure logging
 logging.basicConfig(
@@ -116,6 +116,7 @@ app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
 app.include_router(users.router, prefix=settings.API_V1_PREFIX)
 app.include_router(lab_test.router, prefix=settings.API_V1_PREFIX)
 app.include_router(contact.router, prefix=settings.API_V1_PREFIX)
+app.include_router(recommendations.RecommendationsRouter().router, prefix=settings.API_V1_PREFIX)  
 
 
 if __name__ == "__main__":

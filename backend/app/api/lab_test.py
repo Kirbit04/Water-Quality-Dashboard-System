@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, BackgroundTasks
 import logging
 from typing import List
 
@@ -6,11 +6,14 @@ from ..domain.schemas import LabTestCreate, LabTestResponse
 from ..domain.model import LabTest
 from ..services.repository import LabTestRepository
 from ..core.database import get_db_instance
-from ..core.settings import get_settings
+from ..core.settings import get_current_user
+from ..ml.pipeline.processor import WaterQualityProcessor
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/lab-tests", tags=["lab-tests"])
+
+_processor = WaterQualityProcessor()
 
 
 class LabTestService:
@@ -127,11 +130,25 @@ def get_lab_test_service() -> LabTestService:
 @router.post("", response_model=LabTestResponse, status_code=status.HTTP_201_CREATED)
 async def submit_test(
     test_data: LabTestCreate,
-    user_id: int = 1,  # TODO: Get from JWT token
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
     service: LabTestService = Depends(get_lab_test_service)
 ) -> LabTestResponse:
     controller = LabTestController(service)
-    return await controller.submit(user_id, test_data)
+    response = await controller.submit(current_user["id"], test_data)
+    
+    #triggering background processing of the test immediately after submission
+    background_tasks.add_task(_trigger_pipeline, response.id)
+    return response
+
+def _trigger_pipeline(test_id: int):
+    #triggering the entire recommendation pipeline
+        try:
+            row = _processor.fetch_test_by_id(test_id)
+            if row:
+                _processor.process_test(row)
+        except Exception as e:
+            logger.error(f"Pipeline failed for test_id={test_id}: {e}")
 
 
 @router.get("/user/{user_id}", response_model=List[LabTestResponse])

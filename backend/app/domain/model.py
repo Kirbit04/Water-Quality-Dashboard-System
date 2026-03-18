@@ -1,6 +1,6 @@
 from typing import Optional, Dict, Any
 from datetime import datetime
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass
@@ -123,7 +123,7 @@ class LabTest:
     def from_dict(cls, data: Dict[str, Any]) -> 'LabTest':
         #Create instance from dictionary
         return cls(
-            id=data.get('id'),
+            id=data.get('id') or data.get('test_id'),
             user_id=data.get('user_id', 0),
             occupation=data.get('occupation', ''),
             location_id=data.get('location_id', ''),
