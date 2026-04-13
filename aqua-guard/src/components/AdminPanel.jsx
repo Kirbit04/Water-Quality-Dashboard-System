@@ -102,6 +102,7 @@ export default function AdminPanel({ user, onLogout, onNavigate }) {
   const [error, setError]             = useState('');
   const [confirm, setConfirm]         = useState(null); // { message, onConfirm }
   const [page, setPage]               = useState(1);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const PER_PAGE = 10;
 
   // Fetch data when tab changes 
@@ -319,6 +320,35 @@ export default function AdminPanel({ user, onLogout, onNavigate }) {
 
       {confirm && <ConfirmModal message={confirm.message} onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)} />}
 
+      {showLogoutConfirm && (
+        <div style={{
+          position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        }}>
+          <div style={{
+            background: '#fff', borderRadius: '12px', padding: '32px',
+            maxWidth: '400px', width: '90%', textAlign: 'center',
+          }}>
+            <p style={{ fontSize: '16px', marginBottom: '24px', color: '#374151' }}>
+              Are you sure you want to logout?
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button onClick={() => setShowLogoutConfirm(false)} style={{
+                padding: '10px 24px', borderRadius: '8px', border: '1px solid #d1d5db',
+                background: '#fff', cursor: 'pointer', fontWeight: '500',
+              }}>Cancel</button>
+              <button onClick={() => {
+                setShowLogoutConfirm(false);
+                onLogout();
+              }} style={{
+                padding: '10px 24px', borderRadius: '8px', border: 'none',
+                background: '#ef4444', color: '#fff', cursor: 'pointer', fontWeight: '500',
+              }}>Logout</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="admin-header">
         <div className="admin-header-left">
@@ -334,7 +364,7 @@ export default function AdminPanel({ user, onLogout, onNavigate }) {
           <h1 className="admin-title">Admin Panel</h1>
         </div>
         <div className="admin-header-right">
-          <button onClick={onLogout} className="admin-user-avatar" title="Logout">
+          <button onClick={() => setShowLogoutConfirm(true)} className="admin-user-avatar" title="Logout">
             {user?.name ? user.name[0].toUpperCase() : '?'}
           </button>
         </div>

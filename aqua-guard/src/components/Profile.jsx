@@ -87,11 +87,13 @@ export default function Profile({ user, onLogout, onNavigate }) {
             <div className="profile-field">
               <span className="profile-label">Member Since</span>
               <p className="profile-value">
-                {new Date().toLocaleDateString('en-US', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                })}
+                {profileData.created_at
+                  ? new Date(profileData.created_at).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                    })
+                  : 'N/A'}
               </p>
             </div>
           </div>
