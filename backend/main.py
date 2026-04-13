@@ -7,7 +7,7 @@ from pathlib import Path
 
 from app.core.settings import get_settings
 from app.core.database import get_db_instance
-from app.api import auth, users, lab_test, contact, recommendations
+from app.api import auth, users, lab_test, contact, recommendations, admin
 
 # Configure logging
 logging.basicConfig(
@@ -55,6 +55,7 @@ app = FastAPI(
     title=settings.APP_NAME,
     description="Water Quality Dashboard System - FastAPI backend with MySQL",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # Configure CORS
@@ -64,6 +65,7 @@ app.add_middleware(
     allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
     allow_methods=settings.CORS_ALLOW_METHODS,
     allow_headers=settings.CORS_ALLOW_HEADERS,
+    expose_headers=settings.EXPOSE_HEADERS,
 )
 
 #removing __pycache__ directories at startup to prevent stale bytecode issues
@@ -116,7 +118,8 @@ app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
 app.include_router(users.router, prefix=settings.API_V1_PREFIX)
 app.include_router(lab_test.router, prefix=settings.API_V1_PREFIX)
 app.include_router(contact.router, prefix=settings.API_V1_PREFIX)
-app.include_router(recommendations.RecommendationsRouter().router, prefix=settings.API_V1_PREFIX)  
+app.include_router(recommendations.RecommendationsRouter().router, prefix=settings.API_V1_PREFIX)
+app.include_router(admin.AdminRouter().router, prefix=settings.API_V1_PREFIX)     
 
 
 if __name__ == "__main__":

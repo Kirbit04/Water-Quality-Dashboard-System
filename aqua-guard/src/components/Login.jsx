@@ -120,7 +120,7 @@ export default function Login({ onLogin, onSwitchToSignup }) {
         id: response.userId || response.id,
         name: response.name,
         email: response.email,
-        role: response.role || formData.role,
+        role: response.role,
       });
 
     } catch (err) {

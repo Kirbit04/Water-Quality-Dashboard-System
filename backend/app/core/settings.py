@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     CORS_ALLOW_CREDENTIALS: bool = True
     CORS_ALLOW_METHODS: list = ["*"]
     CORS_ALLOW_HEADERS: list = ["*"]
+    EXPOSE_HEADERS: list = ["Content-Disposition"]
     
     # Server Settings
     HOST: str = "0.0.0.0"

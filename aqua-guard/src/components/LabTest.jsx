@@ -20,8 +20,7 @@ export default function LabTest({ user, onNavigate }) {
 
   const validateField = (name, value) => {
     const errors = {};
-    const val = formData[name] !== undefined ? formData[name] : value;
-    
+
     if ((name === 'occupation' || name === 'all') && !formData.occupation && name === 'all') {
       errors.occupation = 'Occupation is required';
     }
@@ -32,38 +31,38 @@ export default function LabTest({ user, onNavigate }) {
     
     if ((name === 'ph' || name === 'all') && !formData.ph && name === 'all') {
       errors.ph = 'pH level is required';
-    } else if (formData.ph && (isNaN(formData.ph) || formData.ph < 0 || formData.ph > 14)) {
+    } else if (formData.ph && (isNaN(formData.ph) || formData.ph < 0 || formData.ph > 14 || !/^\d*\.?\d*$/.test(formData.ph))) {
       errors.ph = 'pH must be between 0 and 14';
     }
     
     if ((name === 'turbidity' || name === 'all') && !formData.turbidity && name === 'all') {
       errors.turbidity = 'Turbidity is required';
-    } else if (formData.turbidity && (isNaN(formData.turbidity) || formData.turbidity < 0)) {
-      errors.turbidity = 'Turbidity must be a positive number';
+    } else if (formData.turbidity && (isNaN(formData.turbidity) || formData.turbidity < 0 || formData.turbidity > 1000 || !/^\d*\.?\d*$/.test(formData.turbidity))) {
+      errors.turbidity = 'Turbidity must be a positive number between 0 and 1000';
     }
     
     if ((name === 'salinity' || name === 'all') && !formData.salinity && name === 'all') {
       errors.salinity = 'Salinity is required';
-    } else if (formData.salinity && (isNaN(formData.salinity) || formData.salinity < 0)) {
-      errors.salinity = 'Salinity must be a positive number';
+    } else if (formData.salinity && (isNaN(formData.salinity) || formData.salinity < 0 || formData.salinity > 70000 || !/^\d*\.?\d*$/.test(formData.salinity))) {
+      errors.salinity = 'Salinity must be a positive number between 0 and 70000';
     }
     
     if ((name === 'dissolved_oxygen' || name === 'all') && !formData.dissolved_oxygen && name === 'all') {
       errors.dissolved_oxygen = 'Dissolved oxygen is required';
-    } else if (formData.dissolved_oxygen && (isNaN(formData.dissolved_oxygen) || formData.dissolved_oxygen < 0)) {
-      errors.dissolved_oxygen = 'Dissolved oxygen must be a positive number';
+    } else if (formData.dissolved_oxygen && (isNaN(formData.dissolved_oxygen) || formData.dissolved_oxygen < 0 || formData.dissolved_oxygen > 20 || !/^\d*\.?\d*$/.test(formData.dissolved_oxygen))) {
+      errors.dissolved_oxygen = 'Dissolved oxygen must be a positive number between 0 and 20';
     }
     
     if ((name === 'nitrates' || name === 'all') && !formData.nitrates && name === 'all') {
       errors.nitrates = 'Nitrates is required';
-    } else if (formData.nitrates && (isNaN(formData.nitrates) || formData.nitrates < 0)) {
-      errors.nitrates = 'Nitrates must be a positive number';
+    } else if (formData.nitrates && (isNaN(formData.nitrates) || formData.nitrates < 0 || formData.nitrates > 100 || !/^\d*\.?\d*$/.test(formData.nitrates))) {
+      errors.nitrates = 'Nitrates must be a positive number between 0 and 100';
     }
     
     if ((name === 'phosphates' || name === 'all') && !formData.phosphates && name === 'all') {
       errors.phosphates = 'Phosphates is required';
-    } else if (formData.phosphates && (isNaN(formData.phosphates) || formData.phosphates < 0)) {
-      errors.phosphates = 'Phosphates must be a positive number';
+    } else if (formData.phosphates && (isNaN(formData.phosphates) || formData.phosphates < 0 || formData.phosphates > 50 || !/^\d*\.?\d*$/.test(formData.phosphates))) {
+      errors.phosphates = 'Phosphates must be a positive number between 0 and 50';
     }
     
     return errors;
@@ -75,6 +74,7 @@ export default function LabTest({ user, onNavigate }) {
       ...prev,
       [name]: value,
     }));
+
     
     const newErrors = { ...fieldErrors };
     const fieldValidation = validateField(name, value);
@@ -230,7 +230,7 @@ export default function LabTest({ user, onNavigate }) {
                     value={formData.turbidity}
                     onChange={handleChange}
                     step="0.1"
-                    placeholder="0.8"
+                    placeholder="15"
                     className="form-input"
                     style={{ borderColor: fieldErrors.turbidity ? '#ff3333' : 'var(--input-border)' }}
                   />
@@ -244,7 +244,7 @@ export default function LabTest({ user, onNavigate }) {
                       name="salinity"
                       value={formData.salinity}
                       onChange={handleChange}
-                      placeholder="250"
+                      placeholder="850"
                       className="form-input"
                       style={{ flex: 1, borderColor: fieldErrors.salinity ? '#ff3333' : 'var(--input-border)' }}
                     />
@@ -266,11 +266,11 @@ export default function LabTest({ user, onNavigate }) {
                       step="0.1"
                       placeholder="8.5"
                       className="form-input"
-                      style={{ flex: 1, borderColor: fieldErrors.dissolvedOxygen ? '#ff3333' : 'var(--input-border)' }}
+                      style={{ flex: 1, borderColor: fieldErrors.dissolved_oxygen ? '#ff3333' : 'var(--input-border)' }}
                     />
                     <div style={{ display: 'flex', alignItems: 'center', fontSize: '13px', color: '#666666' }}>mg/L</div>
                   </div>
-                  {fieldErrors.dissolvedOxygen && <div className="error-message">{fieldErrors.dissolvedOxygen}</div>}
+                  {fieldErrors.dissolved_oxygen && <div className="error-message">{fieldErrors.dissolved_oxygen}</div>}
                 </div>
                 <div className="form-group">
                   <label className="form-label">Nitrates</label>

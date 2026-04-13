@@ -1,4 +1,4 @@
-import sys, os, json, logging
+import sys, logging
 from pathlib import Path
 from datetime import datetime
 
@@ -14,8 +14,6 @@ sys.path.insert(0, str(BASE_DIR))
 from app.ml.model.wqi_engine import full_assessment
 from app.ml.model.recommendation_engine import generate_recommendations
 from ...core.database import get_db_instance
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)s  %(message)s")
 
 
 class WaterQualityProcessor:
@@ -167,6 +165,9 @@ class WaterQualityProcessor:
         )
 
         # Step 5 — Write to DB
+        if self.result_exists(test_id):
+            self.log.warning(f"test_id={test_id} was processed. Skipping DB insert.")
+            return {"test_id": test_id, "status": "already_processed"}
         result_id = self._insert_model_result(test_id, wqi, health_score, risk_level, ml_conf)
         n_recs    = self._insert_recommendations(result_id, rec_output["recommendations"])
 

@@ -148,34 +148,55 @@ export const contactAPI = {
 
 // Admin APIs
 export const adminAPI = {
+ 
   getStats: async () => {
-    return apiCall('/admin/stats', {
-      method: 'GET',
-    });
+    return apiCall('/admin/stats', { method: 'GET' });
+  },
+ 
+  // Users
+  getUsers: async (skip = 0, limit = 100) => {
+    return apiCall(`/admin/users?skip=${skip}&limit=${limit}`, { method: 'GET' });
   },
 
+ //labtests
   getSubmittedTests: async (skip = 0, limit = 100) => {
-    return apiCall(`/lab-tests?skip=${skip}&limit=${limit}`, {
-      method: 'GET',
-    });
+    return apiCall(`/lab-tests?skip=${skip}&limit=${limit}`, { method: 'GET' });
   },
-
+ 
+  // Model results
+  getModelResults: async (skip = 0, limit = 100) => {
+    return apiCall(`/admin/model_results?skip=${skip}&limit=${limit}`, { method: 'GET' });
+  },
+ 
+  // Recommendations
+  getRecommendations: async (skip = 0, limit = 100) => {
+    return apiCall(`/admin/recommendations?skip=${skip}&limit=${limit}`, { method: 'GET' });
+  },
+ 
+  // Generic delete for all the entities
+  delete: async (entity, id) => {
+    const endpointMap = {
+      'users':           `/admin/users/${id}`,
+      'lab-tests':       `/lab-tests/${id}`,
+      'model-results':   `/admin/model_results/${id}`,
+      'recommendations': `/admin/recommendations/${id}`,
+    };
+    const endpoint = endpointMap[entity];
+    if (!endpoint) throw new Error(`Unknown entity: ${entity}`);
+    return apiCall(endpoint, { method: 'DELETE' });
+  },
+ 
   exportTestData: async () => {
     const response = await fetch(`${API_BASE_URL}/admin/tests/export/csv`, {
       method: 'GET',
+      credentials: 'include',
     });
-
-    if (!response.ok) {
-      throw new Error('Failed to export data');
-    }
-
+    if (!response.ok) throw new Error('Failed to export data');
     return response.blob();
   },
-
+ 
   getAllMessages: async (skip = 0, limit = 100) => {
-    return apiCall(`/contact?skip=${skip}&limit=${limit}`, {
-      method: 'GET',
-    });
+    return apiCall(`/contact?skip=${skip}&limit=${limit}`, { method: 'GET' });
   },
 };
 

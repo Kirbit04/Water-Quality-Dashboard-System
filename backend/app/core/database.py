@@ -157,6 +157,9 @@ class Database:
             logger.error(f"Database connection test failed: {e}")
             return False
 
+    def close(self) -> None: 
+        logger.info("Database shutdown complete (per-query connections, nothing to close).")
+
 
 # Dependency for FastAPI
 def get_database() -> Database:

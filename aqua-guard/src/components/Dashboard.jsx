@@ -2,6 +2,59 @@ import { useState, useEffect } from 'react';
 import Navigation from './Navigation';
 import { labTestAPI } from '../api';
 
+// Function to download recommendations and scores
+const downloadReport = (healthScore, wqiScore, recommendations, testDate) => {
+  const dateStr = new Date(testDate).toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'long', year: 'numeric'
+  });
+  
+  let content = `AQUAGUARD - WATER QUALITY REPORT\n`;
+  content += `Generated: ${dateStr}\n`;
+  content += `${'='.repeat(60)}\n\n`;
+  
+  content += `SCORE SUMMARY\n`;
+  content += `${'─'.repeat(60)}\n`;
+  content += `Health Score: ${healthScore}%\n`;
+  content += `WQI Score: ${parseFloat(wqiScore).toFixed(1)}\n\n`;
+  
+  content += `SCORE INTERPRETATION\n`;
+  content += `${'─'.repeat(60)}\n\n`;
+  
+  content += `Health Score (0-100%)\n`;
+  content += `An overall wellness rating of your water quality based on the measured parameters\n`;
+  content += `and their compliance with quality standards.\n\n`;
+  content += `Rating Thresholds:\n`;
+  content += `  • 90-100%: Excellent - Water meets all quality standards\n`;
+  content += `  • 70-89%:  Good - Water quality is acceptable with minor concerns\n`;
+  content += `  • 50-69%:  Moderate - Water requires monitoring and intervention\n`;
+  content += `  • 30-49%:  Poor - Water quality is compromised; action needed\n`;
+  content += `  • <30%:    Critical - Immediate intervention required\n\n`;
+  
+  content += `WQI Score (Water Quality Index, 0-100)\n`;
+  content += `A scientific assessment of water's suitability for human use and aquatic life.\n`;
+  content += `Calculated from key parameters: pH, turbidity, dissolved oxygen, nitrogen,\n`;
+  content += `phosphorus, and salinity levels. Higher scores indicate greater fitness for use.\n\n`;
+  
+  content += `${'='.repeat(60)}\n`;
+  content += `ACTIONABLE RECOMMENDATIONS\n`;
+  content += `${'='.repeat(60)}\n\n`;
+  
+  recommendations.forEach((rec, index) => {
+    content += `${index + 1}. ${rec.recommendation_type} [${rec.severity_level}]\n`;
+    content += `   ${rec.recommendation_text}\n\n`;
+  });
+  
+  const blob = new Blob([content], { type: 'text/plain' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `AquaGuard_Report_${dateStr.replace(/\s+/g, '_')}.txt`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
 // WHO thresholds for status badges
 const getStatus = (param, value) => {
   if (value === null || value === undefined) return 'Unknown';
@@ -84,6 +137,19 @@ const NoDataBanner = () => (
   </div>
 );
 
+const ScoreExplanationBanner = () => (
+  <div style={{
+    margin: '24px',
+    padding: '12px 28px',
+    backgroundColor: '#eff6ff',
+    borderRadius: '2px',
+    color: '#1e40af',
+    fontSize: '14px'
+  }}>
+    Health Score is a percentage rating of your water quality; WQI (Water Quality Index) is a scientific measurement of water fitness based on parameters like pH, oxygen, and other pollutants. More information on the report that can be downloaded below!
+  </div>
+);
+
 // setting main dashboard page
 export default function Dashboard({ user, onNavigate }) {
   const [kpis, setKpis]               = useState([]);
@@ -118,11 +184,16 @@ export default function Dashboard({ user, onNavigate }) {
         setTestDate(latestTest.date_of_test || latestTest.created_at);
 
         // Step 2 — fetch ML results + recommendations for that test
-        let results = null
-        try{
-          await labTestAPI.processTest(latestTest.id);
+        let results = null;
+        try {
           results = await labTestAPI.getResults(latestTest.id);
-        }catch{
+
+          // If no results exist yet, process the test then fetch results
+          if (!results || !results.parameters) {
+            await labTestAPI.processTest(latestTest.id);
+            results = await labTestAPI.getResults(latestTest.id);
+          }
+        } catch {
           const parameters = {
             ph:               latestTest.ph,
             turbidity:        latestTest.turbidity,
@@ -188,6 +259,7 @@ export default function Dashboard({ user, onNavigate }) {
         {/* Main content — only shown when data is available */}
         {!loading && !error && hasData && (
           <>
+
             {/* KPI Grid */}
             <div className="kpi-section">
               <h2 className="section-title">Key Performance Indicators</h2>
@@ -225,6 +297,9 @@ export default function Dashboard({ user, onNavigate }) {
                   )}
                 </div>
               )}
+              
+              {/* Explanation Banner */}
+              <ScoreExplanationBanner />
 
               {/* Recommendations */}
               {recommendations.length > 0 && (
@@ -242,6 +317,31 @@ export default function Dashboard({ user, onNavigate }) {
                       </li>
                     ))}
                   </ul>
+                  
+                  {/* Download Button */}
+                  <div style={{ marginTop: '24px', textAlign: 'center' }}>
+                    <button
+                      onClick={() => downloadReport(healthScore, wqiScore, recommendations, testDate)}
+                      style={{
+                        padding: '12px 28px',
+                        backgroundColor: '#10b981',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.target.style.backgroundColor = '#052c96'}
+                      onMouseLeave={(e) => e.target.style.backgroundColor = '#1067b9'}
+                    >
+                      Download Report
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

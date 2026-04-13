@@ -8,11 +8,13 @@ const Validation_rules = {
     required: true,
     minLength: 2,
     maxLength: 100,
-    validate: (value) => /^[A-Za-z\s\-']+$/.test(value.trim()),
+    validate:(value) => /^[A-Za-z\s\-']+$/.test(value.trim()),
     errorMessages: {
       required: 'Name is required',
+      pattern: 'Name can only contain letters, spaces, hyphens, and apostrophes',
       minLength: 'Name must be at least 2 characters',
-      maxLength: 'Name must be at most 100 characters',
+      maxLength: 'Name must be at most 100 characters', 
+
     }
   },
   email: {
@@ -70,6 +72,11 @@ const validateFieldValue = (fieldName, value, allFormData) => {
   // Skip validation if field is empty and optional
   if (!value || value.trim() === '') return null;
 
+  // Check pattern
+  if (rule.validate && !rule.validate(value)) {
+    return rule.errorMessages.pattern;
+  }
+
   // Check minLength and maxLength
   if (rule.minLength && value.length < rule.minLength) {
     return rule.errorMessages.minLength;
@@ -77,12 +84,6 @@ const validateFieldValue = (fieldName, value, allFormData) => {
   if (rule.maxLength && value.length > rule.maxLength) {
     return rule.errorMessages.maxLength;
   }
-
-  // Check pattern
-  if (rule.validate && !rule.validate(value)) {
-    return rule.errorMessages.pattern;
-  }
-
   // Check match (for confirmPassword)
   if (rule.match && value !== allFormData[rule.match]) {
     return rule.errorMessages.match;
