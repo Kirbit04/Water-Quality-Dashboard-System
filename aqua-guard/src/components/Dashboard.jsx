@@ -1,58 +1,197 @@
 import { useState, useEffect, useRef} from 'react';
 import Navigation from './Navigation';
 import { labTestAPI } from '../api';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // Function to download recommendations and scores
-const downloadReport = (healthScore, wqiScore, recommendations, testDate) => {
-  const dateStr = new Date(testDate).toLocaleDateString('en-GB', {
-    day: 'numeric', month: 'long', year: 'numeric'
-  });
-  
-  let content = `AQUAGUARD - WATER QUALITY REPORT\n`;
-  content += `Generated: ${dateStr}\n`;
-  content += `${'='.repeat(60)}\n\n`;
-  
-  content += `SCORE SUMMARY\n`;
-  content += `${'─'.repeat(60)}\n`;
-  content += `Health Score: ${healthScore}%\n`;
-  content += `WQI Score: ${parseFloat(wqiScore).toFixed(1)}\n\n`;
-  
-  content += `SCORE INTERPRETATION\n`;
-  content += `${'─'.repeat(60)}\n\n`;
-  
-  content += `Health Score (0-100%)\n`;
-  content += `An overall wellness rating of your water quality based on the measured parameters\n`;
-  content += `and their compliance with quality standards.\n\n`;
-  content += `Rating Thresholds:\n`;
-  content += `  • 90-100%: Excellent - Water meets all quality standards\n`;
-  content += `  • 70-89%:  Good - Water quality is acceptable with minor concerns\n`;
-  content += `  • 50-69%:  Moderate - Water requires monitoring and intervention\n`;
-  content += `  • 30-49%:  Poor - Water quality is compromised; action needed\n`;
-  content += `  • <30%:    Critical - Immediate intervention required\n\n`;
-  
-  content += `WQI Score (Water Quality Index, 0-100)\n`;
-  content += `A scientific assessment of water's suitability for human use and aquatic life.\n`;
-  content += `Calculated from key parameters: pH, turbidity, dissolved oxygen, nitrogen,\n`;
-  content += `phosphorus, and salinity levels. Higher scores indicate greater fitness for use.\n\n`;
-  
-  content += `${'='.repeat(60)}\n`;
-  content += `ACTIONABLE RECOMMENDATIONS\n`;
-  content += `${'='.repeat(60)}\n\n`;
-  
-  recommendations.forEach((rec, index) => {
-    content += `${index + 1}. ${rec.recommendation_type} [${rec.severity_level}]\n`;
-    content += `   ${rec.recommendation_text}\n\n`;
-  });
-  
-  const blob = new Blob([content], { type: 'text/plain' });
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `AquaGuard_Report_${dateStr.replace(/\s+/g, '_')}.txt`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  window.URL.revokeObjectURL(url);
+const generatePDFReport = async (healthScore, wqiScore, recommendations, testDate, trendChartRef, paramChartRef, kpis) => {
+  try {
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    let yPosition = 15;
+    const margin = 15;
+    const contentWidth = pageWidth - (margin * 2);
+
+    // Title
+    doc.setFontSize(20);
+    doc.setTextColor(10, 185, 129);
+    doc.text('AQUALITCS - WATER QUALITY REPORT', margin, yPosition);
+    yPosition += 10;
+
+    // Date
+    doc.setFontSize(11);
+    doc.setTextColor(100, 100, 100);
+    const dateStr = new Date(testDate).toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+    doc.text(`Generated: ${dateStr}`, margin, yPosition);
+    yPosition += 10;
+
+    // Divider line
+    doc.setDrawColor(200, 200, 200);
+    doc.line(margin, yPosition, pageWidth - margin, yPosition);
+    yPosition += 8;
+
+    // Score Summary Section
+    doc.setFontSize(14);
+    doc.setTextColor(31, 41, 55);
+    doc.text('SCORE SUMMARY', margin, yPosition);
+    yPosition += 8;
+
+    doc.setFontSize(11);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Health Score: ${healthScore}%`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`WQI Score: ${parseFloat(wqiScore).toFixed(1)} / 100`, margin, yPosition);
+    yPosition += 10;
+
+    // KPI Table
+    doc.setFontSize(12);
+    doc.setTextColor(31, 41, 55);
+    doc.text('KEY PARAMETERS', margin, yPosition);
+    yPosition += 8;
+
+    doc.setFontSize(9);
+    const kpiData = kpis.map(kpi => [
+      kpi.label,
+      kpi.value !== null && kpi.value !== undefined ? parseFloat(kpi.value).toFixed(2) : '—',
+      kpi.unit,
+      kpi.status
+    ]);
+
+    autoTable(doc,{
+      head: [['Parameter', 'Value', 'Unit', 'Status']],
+      body: kpiData,
+      startY: yPosition,
+      margin: margin,
+      theme: 'grid',
+      styles: { fontSize: 9 },
+      headerStyles: { fillColor: [16, 185, 129], textColor: 255 },
+      alternateRowStyles: { fillColor: [245, 247, 250] }
+    });
+
+    yPosition = doc.lastAutoTable.finalY + 10;
+
+    // Charts Section
+    doc.addPage();
+    yPosition = 15;
+
+    doc.setFontSize(14);
+    doc.setTextColor(31, 41, 55);
+    doc.text('TREND ANALYSIS', margin, yPosition);
+    yPosition += 10;
+
+    // Health & WQI Charts
+    if (trendChartRef?.current) {
+      try {
+        const canvas = await html2canvas(trendChartRef.current, { 
+          scale: 2,
+          useCORS: true 
+        });
+        const imgData = canvas.toDataURL('image/png');
+        const imgWidth = contentWidth;
+        const imgHeight = (canvas.height / canvas.width) * imgWidth;
+
+        if (yPosition + imgHeight > pageHeight - 10) {
+          doc.addPage();
+          yPosition = 15;
+        }
+
+        doc.addImage(imgData, 'PNG', margin, yPosition, imgWidth, imgHeight);
+        yPosition += imgHeight + 10;
+      } catch (err) {
+        console.error('Error capturing trend chart:', err);
+      }
+    }
+
+    // Parameters Chart
+    if (paramChartRef?.current) {
+      if (yPosition > pageHeight - 60) {
+        doc.addPage();
+        yPosition = 15;
+      }
+
+      try {
+        const canvas = await html2canvas(paramChartRef.current, { 
+          scale: 2,
+          useCORS: true 
+        });
+        const imgData = canvas.toDataURL('image/png');
+        const imgWidth = contentWidth;
+        const imgHeight = (canvas.height / canvas.width) * imgWidth;
+
+        if (yPosition + imgHeight > pageHeight - 10) {
+          doc.addPage();
+          yPosition = 15;
+        }
+
+        doc.addImage(imgData, 'PNG', margin, yPosition, imgWidth, imgHeight);
+        yPosition += imgHeight + 10;
+      } catch (err) {
+        console.error('Error capturing parameter chart:', err);
+      }
+    }
+
+    // Recommendations Section
+    if (recommendations.length > 0) {
+      if (yPosition > pageHeight - 40) {
+        doc.addPage();
+        yPosition = 15;
+      }
+
+      doc.setFontSize(14);
+      doc.setTextColor(31, 41, 55);
+      doc.text('RECOMMENDATIONS', margin, yPosition);
+      yPosition += 8;
+
+      const recommendationData = recommendations.map((rec) => [
+        rec.recommendation_type,
+        rec.recommendation_text,
+        rec.severity_level
+      ]);
+
+      autoTable(doc,{
+        head: [['Type', 'Recommendation', 'Severity']],
+        body: recommendationData,
+        startY: yPosition,
+        margin: margin,
+        theme: 'grid',
+        styles: { fontSize: 9, cellPadding: 4 },
+        headerStyles: { fillColor: [16, 185, 129], textColor: 255, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [245, 247, 250] },
+        columnStyles: {
+          0: { cellWidth: 30 },
+          1: { cellWidth: contentWidth - 80 },
+          2: { cellWidth: 30 }
+        },
+        bodyStyles: { valign: 'top' }
+      });
+
+      yPosition = doc.lastAutoTable.finalY + 10;
+    }
+
+    // Footer
+    const totalPages = doc.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setFontSize(9);
+      doc.setTextColor(150, 150, 150);
+      doc.text(`Page ${i} of ${totalPages}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
+    }
+
+    // Download
+    const fileName = `AquaGuard_Report_${dateStr.replace(/\s+/g, '_')}.pdf`;
+    doc.save(fileName);
+  } catch (error) {
+    console.error('Error generating PDF:', error);
+    alert('Failed to generate PDF. Please try again.');
+  }
 };
 
 // WHO thresholds for status badges
@@ -71,7 +210,7 @@ const getStatus = (param, value) => {
     case 'phosphates':
       return v <= 0.1 ? 'Good' : v <= 0.5 ? 'Moderate' : 'Critical';
     case 'salinity':
-      return v <= 500 ? 'Good' : v <= 1500 ? 'Moderate' : 'Critical';
+      return v <= 35 ? 'Good' : v <= 50 ? 'Moderate' : 'Critical';
     default:
       return 'Unknown';
   }
@@ -81,7 +220,7 @@ const getStatus = (param, value) => {
 const buildKPIs = (parameters) => [
   { label: 'pH Level',          key: 'ph',               value: parameters.ph,               unit: 'pH Units', icon: '💧' },
   { label: 'Turbidity',         key: 'turbidity',         value: parameters.turbidity,         unit: 'NTU',      icon: '〰️' },
-  { label: 'Salinity',          key: 'salinity',          value: parameters.salinity,          unit: 'µS/cm',    icon: '❄️' },
+  { label: 'Salinity',          key: 'salinity',          value: parameters.salinity,          unit: 'PPT',      icon: '❄️' },
   { label: 'Dissolved Oxygen',  key: 'dissolved_oxygen',  value: parameters.dissolved_oxygen,  unit: 'mg/L',     icon: '💨' },
   { label: 'Nitrates',          key: 'nitrates',          value: parameters.nitrates,          unit: 'mg/L',     icon: '📊' },
   { label: 'Phosphates',        key: 'phosphates',        value: parameters.phosphates,        unit: 'mg/L',     icon: '⚗️' },
@@ -137,6 +276,208 @@ const NoDataBanner = () => (
   </div>
 );
 
+// Trend Chart Components
+const HealthAndWQITrendChart = ({ trendData }) => {
+  if (!trendData || trendData.length === 0) {
+    return null;
+  }
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', margin: '24px' }}>
+      {/* Health Score Trend */}
+      <div style={{
+        backgroundColor: '#ffffff',
+        padding: '24px',
+        borderRadius: '12px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+      }}>
+        <h3 style={{ marginBottom: '16px', fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>
+          Health Score Trend
+        </h3>
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={trendData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <XAxis
+              dataKey="date"
+              tick={{ fontSize: 12 }}
+              stroke="#9ca3af"
+            />
+            <YAxis
+              domain={[0, 100]}
+              label={{ value: '% Score', angle: -90, position: 'insideLeft' }}
+              tick={{ fontSize: 12 }}
+              stroke="#9ca3af"
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: '#ffffff',
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                padding: '12px'
+              }}
+              formatter={(value) => `${value}%`}
+            />
+            <Legend />
+            <Line
+              type="monotone"
+              dataKey="healthScore"
+              stroke="#10b981"
+              strokeWidth={3}
+              dot={{ fill: '#10b981', r: 5 }}
+              activeDot={{ r: 7 }}
+              isAnimationActive={true}
+              name="Health Score"
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* WQI Score Trend */}
+      <div style={{
+        backgroundColor: '#ffffff',
+        padding: '24px',
+        borderRadius: '12px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+      }}>
+        <h3 style={{ marginBottom: '16px', fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>
+          WQI Score Trend
+        </h3>
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={trendData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <XAxis
+              dataKey="date"
+              tick={{ fontSize: 12 }}
+              stroke="#9ca3af"
+            />
+            <YAxis
+              domain={[0, 100]}
+              label={{ value: 'WQI Score (0-100)', angle: -90, position: 'insideLeft' }}
+              tick={{ fontSize: 12 }}
+              stroke="#9ca3af"
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: '#ffffff',
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                padding: '12px'
+              }}
+              formatter={(value) => value.toFixed(1)}
+            />
+            <Legend />
+            <Line
+              type="monotone"
+              dataKey="wqiScore"
+              stroke="#3b82f6"
+              strokeWidth={3}
+              dot={{ fill: '#3b82f6', r: 5 }}
+              activeDot={{ r: 7 }}
+              isAnimationActive={true}
+              name="WQI Score"
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+};
+
+const ParametersTrendChart = ({ parameterData }) => {
+  if (!parameterData || parameterData.length === 0) {
+    return null;
+  }
+
+  return (
+    <div style={{
+      backgroundColor: '#ffffff',
+      padding: '24px',
+      borderRadius: '12px',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+      margin: '24px'
+    }}>
+      <h3 style={{ marginBottom: '16px', fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>
+        Water Parameters Trend
+      </h3>
+      <ResponsiveContainer width="100%" height={350}>
+        <LineChart data={parameterData}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <XAxis
+            dataKey="date"
+            tick={{ fontSize: 12 }}
+            stroke="#9ca3af"
+          />
+          <YAxis
+            tick={{ fontSize: 12 }}
+            stroke="#9ca3af"
+            label={{ value: 'Parameter Value', angle: -90, position: 'insideLeft' }}
+          />
+          <Tooltip
+            contentStyle={{
+              backgroundColor: '#ffffff',
+              border: '1px solid #e5e7eb',
+              borderRadius: '8px',
+              padding: '12px'
+            }}
+            formatter={(value) => value?.toFixed(2) || 'N/A'}
+          />
+          <Legend />
+          <Line
+            type="monotone"
+            dataKey="ph"
+            stroke="#f59e0b"
+            strokeWidth={2}
+            dot={{ r: 4 }}
+            activeDot={{ r: 6 }}
+            isAnimationActive={true}
+            name="pH"
+          />
+          <Line
+            type="monotone"
+            dataKey="turbidity"
+            stroke="#ec4899"
+            strokeWidth={2}
+            dot={{ r: 4 }}
+            activeDot={{ r: 6 }}
+            isAnimationActive={true}
+            name="Turbidity (NTU)"
+          />
+          <Line
+            type="monotone"
+            dataKey="dissolved_oxygen"
+            stroke="#8b5cf6"
+            strokeWidth={2}
+            dot={{ r: 4 }}
+            activeDot={{ r: 6 }}
+            isAnimationActive={true}
+            name="Dissolved Oxygen (mg/L)"
+          />
+          <Line
+            type="monotone"
+            dataKey="nitrates"
+            stroke="#06b6d4"
+            strokeWidth={2}
+            dot={{ r: 4 }}
+            activeDot={{ r: 6 }}
+            isAnimationActive={true}
+            name="Nitrates (mg/L)"
+          />
+          <Line
+            type="monotone"
+            dataKey="phosphates"
+            stroke="#14b8a6"
+            strokeWidth={2}
+            dot={{ r: 4 }}
+            activeDot={{ r: 6 }}
+            isAnimationActive={true}
+            name="Phosphates (mg/L)"
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
 const ScoreExplanationBanner = () => (
   <div style={{
     margin: '24px',
@@ -161,6 +502,10 @@ export default function Dashboard({ user, onNavigate }) {
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState(null);
   const [hasData, setHasData]         = useState(false);
+  const [trendData, setTrendData]     = useState([]);
+  const [parameterData, setParameterData] = useState([]);
+  const trendChartRef = useRef(null);
+  const paramChartRef = useRef(null);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -168,27 +513,93 @@ export default function Dashboard({ user, onNavigate }) {
         setLoading(true);
         setError(null);
 
-        // Step 1 — fetch all tests for this user, pick the most recent
-        const tests = await labTestAPI.getUserTests(user.id);
+        // Step 1 — fetch all tests for this user
+        const tests = await labTestAPI.getUserTests(user.id, 0, 100);
 
         if (!tests || tests.length === 0) {
           setHasData(false);
           return;
         }
 
-        //setting test date for the most recent test
+        // Sort tests by date (oldest first for trending)
         const sortedTests = [...tests].sort((a, b) =>
-          new Date(b.created_at) - new Date(a.created_at)
+          new Date(a.created_at) - new Date(b.created_at)
         );
-        const latestTest = sortedTests[0];
+
+        // Step 2 — fetch results for each test and build trend data
+        const trendPoints = [];
+        const paramPoints = [];
+
+        for (const test of sortedTests) {
+          try {
+            const results = await labTestAPI.getResults(test.id);
+            
+            if (results && results.health_score !== undefined && results.wqi_score !== undefined) {
+              const dateStr = new Date(test.date_of_test || test.created_at).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric'
+              });
+
+              trendPoints.push({
+                date: dateStr,
+                healthScore: results.health_score,
+                wqiScore: parseFloat(results.wqi_score),
+              });
+
+              paramPoints.push({
+                date: dateStr,
+                ph: test.ph,
+                turbidity: test.turbidity,
+                dissolved_oxygen: test.dissolved_oxygen,
+                nitrates: test.nitrates,
+                phosphates: test.phosphates,
+              });
+            }
+          } catch (err) {
+            // If a result fails to load, try to process the test
+            try {
+              await labTestAPI.processTest(test.id);
+              const results = await labTestAPI.getResults(test.id);
+              
+              if (results && results.health_score !== undefined && results.wqi_score !== undefined) {
+                const dateStr = new Date(test.date_of_test || test.created_at).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric'
+                });
+
+                trendPoints.push({
+                  date: dateStr,
+                  healthScore: results.health_score,
+                  wqiScore: parseFloat(results.wqi_score),
+                });
+
+                paramPoints.push({
+                  date: dateStr,
+                  ph: test.ph,
+                  turbidity: test.turbidity,
+                  dissolved_oxygen: test.dissolved_oxygen,
+                  nitrates: test.nitrates,
+                  phosphates: test.phosphates,
+                });
+              }
+            } catch (processErr) {
+              console.debug(`Could not process test ${test.id}`);
+            }
+          }
+        }
+
+        setTrendData(trendPoints);
+        setParameterData(paramPoints);
+
+        // Step 3 — use the most recent test for the main display
+        const latestTest = sortedTests[sortedTests.length - 1];
         setTestDate(latestTest.date_of_test || latestTest.created_at);
 
-        // Step 2 — fetch ML results + recommendations for that test
+        // Step 4 — fetch ML results + recommendations for latest test
         let results = null;
         try {
           results = await labTestAPI.getResults(latestTest.id);
 
-          // If no results exist yet, process the test then fetch results
           if (!results || !results.parameters) {
             await labTestAPI.processTest(latestTest.id);
             results = await labTestAPI.getResults(latestTest.id);
@@ -207,7 +618,7 @@ export default function Dashboard({ user, onNavigate }) {
           return;
         }
 
-        // Step 3 — populate all state from the results response
+        // Step 5 — populate all state from the results response
         setKpis(buildKPIs(results.parameters));
         setHealthScore(results.health_score);
         setRiskLevel(results.risk_level);
@@ -233,7 +644,7 @@ export default function Dashboard({ user, onNavigate }) {
       <main className="dashboard-container">
         {/* Welcome Section */}
         <div className="welcome-section">
-          <h1 className="welcome-title">Welcome to AquaGuard, {user.name}!</h1>
+          <h1 className="welcome-title">Welcome to Aqualitcs, {user.name}!</h1>
           <p className="welcome-subtitle">
             Your comprehensive overview of water quality. Monitor key parameters and receive
             actionable recommendations to maintain a healthy environment.
@@ -282,6 +693,18 @@ export default function Dashboard({ user, onNavigate }) {
               </div>
             </div>
 
+            {/* Time Series Trend Charts */}
+            <div style={{ marginTop: '32px' }}>
+              <h2 className="section-title" style={{ margin: '24px 24px 0' }}>Trend Analysis</h2>
+              <div ref={trendChartRef}>
+                <HealthAndWQITrendChart trendData={trendData} />
+              </div>
+
+              <div ref={paramChartRef}>
+                <ParametersTrendChart parameterData={parameterData} />
+              </div>
+            </div>
+
             {/* Health Score + Recommendations */}
             <div>
               {/* Health Score */}
@@ -321,7 +744,15 @@ export default function Dashboard({ user, onNavigate }) {
                   {/* Download Button */}
                   <div style={{ marginTop: '24px', textAlign: 'center' }}>
                     <button
-                      onClick={() => downloadReport(healthScore, wqiScore, recommendations, testDate)}
+                      onClick={() => generatePDFReport(
+                        healthScore, 
+                        wqiScore,
+                        recommendations,
+                        testDate,
+                        trendChartRef,
+                        paramChartRef,
+                        kpis
+                      )}
                       style={{
                         padding: '12px 28px',
                         backgroundColor: '#10b981',
@@ -336,8 +767,8 @@ export default function Dashboard({ user, onNavigate }) {
                         gap: '8px',
                         transition: 'background-color 0.2s'
                       }}
-                      onMouseEnter={(e) => e.target.style.backgroundColor = '#052c96'}
-                      onMouseLeave={(e) => e.target.style.backgroundColor = '#1067b9'}
+                      onMouseEnter={(e) => e.target.style.backgroundColor = '#059669'}
+                      onMouseLeave={(e) => e.target.style.backgroundColor = '#10b981'}
                     >
                       Download Report
                     </button>
@@ -350,7 +781,7 @@ export default function Dashboard({ user, onNavigate }) {
       </main>
 
       <footer className="footer">
-        <div>© 2026 AquaGuard. All rights reserved.</div>
+        <div>© 2026 Aqualitcs. All rights reserved.</div>
       </footer>
     </div>
   );

@@ -119,7 +119,7 @@ export default function Profile({ user, onLogout, onNavigate }) {
       </main>
 
       <footer className="footer">
-        © 2026 AquaGuard. All rights reserved.
+        © 2026 Aqualitcs. All rights reserved.
       </footer>
     </div>
   );

@@ -103,7 +103,7 @@ export default function Contact({ onNavigate, user }) {
 
       <main className="contact-container">
         <h1 className="contact-title">
-          Get in Touch with AquaGuard
+          Get in Touch with Aqualitcs
         </h1>
 
         <div className="contact-content">
@@ -211,7 +211,7 @@ export default function Contact({ onNavigate, user }) {
       </main>
 
       <footer className="footer">
-        © 2026 AquaGuard. All rights reserved.
+        © 2026 Aqualitcs. All rights reserved.
       </footer>
     </div>
   );

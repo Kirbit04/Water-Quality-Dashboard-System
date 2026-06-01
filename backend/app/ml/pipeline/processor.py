@@ -117,6 +117,35 @@ class WaterQualityProcessor:
             "salinity":         float(imputed[5]),
         }
 
+    # ===== PPT to EC CONVERSION =====
+    # VISIBLE CONVERSION: Converting user-input salinity from PPT (Parts Per Thousand)
+    # to EC (Electrical Conductivity in µS/cm) for ML model training
+    # Formula: EC (µS/cm) = PPT × 50
+    # This conversion is applied because the ML model was trained on EC values,
+    # while users input salinity in PPT (more intuitive for water quality monitoring)
+    # ================================
+    def _convert_ppt_to_ec(self, cleaned: dict) -> dict:
+        """
+        Convert salinity from PPT (Parts Per Thousand) to EC (Electrical Conductivity µS/cm).
+        
+        Input salinity (cleaned data) is in PPT.
+        Output salinity is converted to EC for ML model.
+        
+        Conversion formula: EC (µS/cm) = PPT × 50
+        This approximation works well for most freshwater and brackish water scenarios.
+        """
+        ppt_value = cleaned["salinity"]
+        
+        # Apply PPT to EC conversion
+        ec_value = ppt_value * 50
+        
+        self.log.info(f"  PPT→EC Conversion: {ppt_value} PPT → {ec_value} µS/cm")
+        
+        # Return cleaned dict with converted salinity (now in EC)
+        converted = cleaned.copy()
+        converted["salinity"] = ec_value
+        return converted
+
     #ML prediction 
 
     def _ml_predict(self, cleaned: dict) -> tuple[str, float]:
@@ -128,6 +157,47 @@ class WaterQualityProcessor:
         return label, conf
 
     #Core pipeline 
+    
+    def _normalize_occupation(self, occupation_str: str) -> str:
+        """
+        Map occupation string from database to recommendation engine keys.
+        Handles various input formats (case-insensitive, partial matches).
+        """
+        if not occupation_str:
+            return "local_user"
+        
+        occ_lower = occupation_str.lower().strip()
+        
+        # Direct mappings
+        mapping = {
+            "water_supplier": "water_supplier",
+            "water supplier": "water_supplier",
+            "supplier": "water_supplier",
+            "farmer": "farmer",
+            "irrigation": "farmer",
+            "livestock_farmer": "livestock_farmer",
+            "livestock farmer": "livestock_farmer",
+            "livestock": "livestock_farmer",
+            "cattle": "livestock_farmer",
+            "local_user": "local_user",
+            "local user": "local_user",
+            "domestic": "local_user",
+            "household": "local_user",
+            "community": "local_user",
+        }
+        
+        # Try exact match first
+        if occ_lower in mapping:
+            return mapping[occ_lower]
+        
+        # Try partial match
+        for key, value in mapping.items():
+            if key in occ_lower or occ_lower in key:
+                return value
+        
+        # Default fallback
+        return "local_user"
+    
     def process_test(self, row: dict) -> dict:
         test_id = row["test_id"]
         self.log.info(f"Processing test_id={test_id} (user_id={row.get('user_id')})")
@@ -136,40 +206,80 @@ class WaterQualityProcessor:
             self.log.warning(f"test_id={test_id} already processed. Skipping.")
             return {"test_id": test_id, "status": "already_processed"}
 
-        # Step 1 — Clean
+        # Step 1 — Clean (data now in original units: PPT for salinity)
         cleaned = self._clean_row(row)
         self.log.debug(f"  Cleaned values: {cleaned}")
+        
+        # Store original PPT value for recommendations
+        original_salinity_ppt = cleaned["salinity"]
 
-        # Step 2 — WQI assessment
-        assessment   = full_assessment(**cleaned)
+        # Step 1.5 — Convert PPT to EC for ML model
+        # CONVERSION POINT: User inputs PPT, but ML model expects EC (Electrical Conductivity)
+        cleaned_for_ml = self._convert_ppt_to_ec(cleaned)
+        self.log.debug(f"  Converted salinity for ML: {cleaned_for_ml['salinity']} µS/cm")
+
+        # Step 2 — WQI assessment (using EC-converted salinity)
+        assessment   = full_assessment(**cleaned_for_ml)
         wqi = assessment["wqi"]
         health_score = assessment["health_score"]
         self.log.debug(f"  WQI={wqi}  Health={health_score}%  Risk={assessment['risk_level']}")
 
-        # Step 3 — ML prediction (WQI-derived risk is authoritative)
-        ml_label, ml_conf = self._ml_predict(cleaned)
+        # Step 3 — ML prediction (WQI-derived risk is authoritative, using EC-converted salinity)
+        ml_label, ml_conf = self._ml_predict(cleaned_for_ml)
         risk_level = assessment["risk_level"]
         self.log.info(f"  WQI risk: {risk_level}  |  ML: {ml_label} ({ml_conf}%)")
 
         # Step 4 — Recommendations
+        # Normalize occupation and build water_data dict for recommendation engine
+        occupation_key = self._normalize_occupation(row.get("occupation", "local_user"))
+        
+        # Use original PPT value for recommendations (not the EC-converted value)
+        water_data = {
+            "pH": cleaned["ph"],
+            "DO": cleaned["dissolved_oxygen"],
+            "NO3": cleaned["nitrates"],
+            "PO4": cleaned["phosphates"],
+            "salinity_ppt": original_salinity_ppt,  # Using original PPT value for recommendations
+            "Turbidity": cleaned["turbidity"],
+            "ml_quality_class": ml_label,
+        }
+        
         rec_output = generate_recommendations(
-            ph=cleaned["ph"],
-            turbidity=cleaned["turbidity"],
-            dissolved_oxygen=cleaned["dissolved_oxygen"],
-            nitrates=cleaned["nitrates"],
-            phosphates=cleaned["phosphates"],
-            salinity=cleaned["salinity"],
-            risk_level=risk_level,
-            wqi=wqi,
-            health_score=health_score,
+            water_data=water_data,
+            occupation=occupation_key,
         )
 
         # Step 5 — Write to DB
+        # Format recommendations for database insertion
+        db_recommendations = []
+        for violation in rec_output["violations"]:
+            for action in rec_output["actionable_recommendations"]:
+                if action.get("parameter") == violation["parameter"]:
+                    text = (
+                        f"{violation['parameter']} violation: {violation['reason']}. "
+                        f"Recommended treatment: {action.get('treatment', 'N/A')}. "
+                        f"Priority: {action.get('priority', 'N/A')}"
+                    )
+                    db_recommendations.append({
+                        "recommendation_text": text,
+                        "recommendation_type": "Treatment",
+                        "severity_level": violation["severity"],
+                    })
+                    break
+        
+        if not db_recommendations:
+            # Add overall status as recommendation if no violations
+            db_recommendations.append({
+                "recommendation_text": rec_output["overall_status"],
+                "recommendation_type": "Status",
+                "severity_level": "Info",
+            })
+        
         if self.result_exists(test_id):
             self.log.warning(f"test_id={test_id} was processed. Skipping DB insert.")
             return {"test_id": test_id, "status": "already_processed"}
         result_id = self._insert_model_result(test_id, wqi, health_score, risk_level, ml_conf)
-        n_recs    = self._insert_recommendations(result_id, rec_output["recommendations"])
+        n_recs    = self._insert_recommendations(result_id, db_recommendations)
 
         self.log.info(f" result_id={result_id} | {n_recs} recommendation(s) inserted")
 
@@ -182,11 +292,11 @@ class WaterQualityProcessor:
             "risk_level":        risk_level,
             "ml_risk_label":     ml_label,
             "ml_confidence":     ml_conf,
-            "overall_action":    rec_output["overall_action"],
-            "n_violations":      rec_output["n_violations"],
+            "occupation":        rec_output["occupation"],
+            "overall_status":    rec_output["overall_status"],
+            "n_violations":      len(rec_output["violations"]),
             "n_recommendations": n_recs,
-            "system_plan":       rec_output["system_plan"],
-            "safe_parameters":   rec_output["safe_parameters"],
+            "monitoring_frequency": rec_output["monitoring_frequency"],
             "sub_indices":       assessment["sub_indices"],
             "cleaned_values":    cleaned,
         }

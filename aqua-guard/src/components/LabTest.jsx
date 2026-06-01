@@ -43,8 +43,8 @@ export default function LabTest({ user, onNavigate }) {
     
     if ((name === 'salinity' || name === 'all') && !formData.salinity && name === 'all') {
       errors.salinity = 'Salinity is required';
-    } else if (formData.salinity && (isNaN(formData.salinity) || formData.salinity < 0 || formData.salinity > 70000 || !/^\d*\.?\d*$/.test(formData.salinity))) {
-      errors.salinity = 'Salinity must be a positive number between 0 and 70000';
+    } else if (formData.salinity && (isNaN(formData.salinity) || formData.salinity < 0 || formData.salinity > 70 || !/^\d*\.?\d*$/.test(formData.salinity))) {
+      errors.salinity = 'Salinity must be a positive number between 0 and 70 PPT';
     }
     
     if ((name === 'dissolved_oxygen' || name === 'all') && !formData.dissolved_oxygen && name === 'all') {
@@ -244,11 +244,11 @@ export default function LabTest({ user, onNavigate }) {
                       name="salinity"
                       value={formData.salinity}
                       onChange={handleChange}
-                      placeholder="850"
+                      placeholder="35"
                       className="form-input"
                       style={{ flex: 1, borderColor: fieldErrors.salinity ? '#ff3333' : 'var(--input-border)' }}
                     />
-                    <div style={{ display: 'flex', alignItems: 'center', fontSize: '13px', color: '#666666' }}>ppm</div>
+                    <div style={{ display: 'flex', alignItems: 'center', fontSize: '13px', color: '#666666' }}>PPT</div>
                   </div>
                   {fieldErrors.salinity && <div className="error-message">{fieldErrors.salinity}</div>}
                 </div>
@@ -332,7 +332,7 @@ export default function LabTest({ user, onNavigate }) {
       </main>
 
       <footer className="footer">
-        © 2026 AquaGuard. All rights reserved.
+        © 2026 Aqualitcs. All rights reserved.
       </footer>
     </div>
   );

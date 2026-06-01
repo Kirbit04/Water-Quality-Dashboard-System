@@ -1,322 +1,453 @@
-# Recommendation engine for generating treatment recommendations based on lab test results and WQI risk level.
+#Water Quality Rule-Based Recommendation Engine
+#Occupation-aware with WHO compliance thresholds
 
-import numpy as np
+from datetime import datetime
 
-# WHO/EPA limits, treatment options, and priority tiers for recommendation generation
-WHO_LIMITS = {
-    "ph": {
-        "ideal": 7.0, "min": 6.5, "max": 8.5, "unit": "pH",
-        "label": "pH",
-    },
-    "turbidity": {
-        "ideal": 0.0, "min": None, "max": 4.0, "unit": "NTU",
-        "label": "Turbidity",
-    },
-    "dissolved_oxygen": {
-        "ideal": 8.0, "min": 6.5, "max": None, "unit": "mg/L",
-        "label": "Dissolved Oxygen",
-    },
-    "nitrates": {
-        "ideal": 0.0, "min": None, "max": 50.0, "unit": "mg/L",
-        "label": "Nitrates",
-    },
-    "phosphates": {
-        "ideal": 0.0, "min": None, "max": 0.1, "unit": "mg/L",
-        "label": "Phosphates",
-    },
-    "salinity": {
-        "ideal": 0.0, "min": None, "max": 1500, "unit": "µS/cm",
-        "label": "Salinity / Conductivity",
-    },
+WHO_BASELINES = {
+    "pH": {"min": 6.5, "max": 8.5, "ideal": 7.0},
+    "DO": {"min": 3.0, "max": 14.0, "ideal": 8.0},  # mg/L
+    "NO3": {"max": 10.0, "warning": 50.0},  # ppm
+    "PO4": {"max": 0.1, "warning": 0.5},  # ppm
+    "TDS": {"excellent": 300, "acceptable": 500, "warning": 1000},  # ppm
+    "Turbidity": {"excellent": 1, "acceptable": 5, "warning": 10},  # NTU
+    "EC": {"safe_aquatic": 300, "caution": 500},  # µS/cm
 }
 
-PRIORITY = {
-    "nitrates":         1,   # methemoglobinaemia risk
-    "dissolved_oxygen": 1,   # acute aquatic/health risk
-    "ph":               2,   # affects all downstream treatment
-    "turbidity":        2,   # must treat before disinfection
-    "phosphates":       3,
-    "salinity":         3,
-}
+# Occupation-specific thresholds
+OCCUPATION_RULES = {
+    "water_supplier": {
+        "displayName": "Water Supplier",
+        "priority": 1,
+        "thresholds": {
+            "pH": {"min": 6.5, "max": 8.5},
+            "DO": {"min": 4.0},
+            "NO3": {"max": 10.0},
+            "PO4": {"max": 0.05},
+            "TDS": {"max": 500},
+            "Turbidity": {"max": 5, "ideal": 1},
+            "EC": {"max": 800},
+        },
+        "treatments": {
+            "high_no3": "Reverse osmosis or ion exchange resin",
+            "high_po4": "Chemical precipitation (alum, ferric chloride)",
+            "high_ec": "Desalination or reverse osmosis",
+            "high_turbidity": "Multi-stage filtration (sand → activated carbon → micron)",
+            "low_do": "Aeration or degassing columns",
+            "low_ph": "Alkali dosing (lime, soda ash)",
+        },
+        "monitoring": "Daily + after treatment",
+    },
 
-URGENCY_ORDER = {"Critical": 0, "High": 1, "Moderate": 2, "Low": 3}
+    "farmer": {
+        "displayName": "Farmer (Irrigation)",
+        "priority": 2,
+        "thresholds": {
+            "pH": {"min": 6.0, "max": 8.0},
+            "DO": {"min": 5.0},
+            "NO3": {"max": 10.0, "warning": 45.0},
+            "PO4": {"max": 0.5},
+            "TDS": {"max": 1200},
+            "Turbidity": {"max": 10, "ideal": 5},
+            "EC": {"max": 1500},
+        },
+        "treatments": {
+            "high_no3": "Dilution with rainwater or low-nitrogen source",
+            "high_ec": "Blending with fresher water or drip irrigation (salt concentration)",
+            "high_po4": "Buffer crops (reed beds) or chemical treatment",
+            "high_turbidity": "Settling ponds or mechanical filtration",
+            "low_ph": "Lime addition before irrigation",
+        },
+        "monitoring": "Weekly during growing season",
+    },
 
-TREATMENTS = {
-    "ph": {
-        "too_low": {
-            "recommendation_type": "pH Correction",
-            "severity_level":      "Moderate",
-            "primary":   ["Lime dosing (calcium hydroxide)", "Soda ash injection"],
-            "secondary": ["Calcite / neutralising filter"],
-            "notes":     "Low pH accelerates pipe corrosion and promotes metal leaching. Target pH 7.0–7.5.",
+    "livestock_farmer": {
+        "displayName": "Livestock Farmer",
+        "priority": 3,
+        "thresholds": {
+            "pH": {"min": 6.0, "max": 8.0},
+            "DO": {"min": 3.0},
+            "NO3": {"max": 100.0},
+            "PO4": {"max": 1.0},
+            "TDS": {"max": 3000},
+            "Turbidity": {"max": 20, "ideal": 10},
+            "EC": {"max": 3000},
         },
-        "too_high": {
-            "recommendation_type": "pH Correction",
-            "severity_level":      "Moderate",
-            "primary":   ["CO₂ injection (carbonation)", "Acid dosing (dilute H₂SO₄ or HCl)"],
-            "secondary": ["Ion exchange softening"],
-            "notes":     "High pH reduces chlorine disinfection efficacy and causes scale formation.",
+        "treatments": {
+            "high_no3": "Blend with cleaner water (40-60 mix) or filter through activated carbon",
+            "high_ec": "Dilution strategy or provide alternative water source",
+            "high_po4": "Usually not critical for livestock",
+            "high_turbidity": "Simple settling tanks; boil before feeding to newborns",
+            "low_do": "Usually not critical unless stagnant (odor check)",
         },
+        "monitoring": "Bi-weekly; more if animals show stress",
     },
-    "turbidity": {
-        "too_high": {
-            "recommendation_type": "Filtration",
-            "severity_level":      "High",
-            "primary":   ["Coagulation + flocculation + sedimentation", "Multi-media sand filtration"],
-            "secondary": ["Ceramic or membrane microfiltration", "Slow sand filtration"],
-            "notes":     "Turbidity above 4 NTU shields pathogens from disinfection. "
-                         "Must be addressed BEFORE chlorination.",
+
+    "local_user": {
+        "displayName": "Local Community/Domestic Use",
+        "priority": 2,
+        "thresholds": {
+            "pH": {"min": 7.0, "max": 8.0},
+            "DO": {"min": 6.0},
+            "NO3": {"max": 10.0},
+            "PO4": {"max": 0.1},
+            "TDS": {"max": 500},
+            "Turbidity": {"max": 3, "ideal": 1},
+            "EC": {"max": 800},
         },
-    },
-    "dissolved_oxygen": {
-        "too_low": {
-            "recommendation_type": "Aeration",
-            "severity_level":      "High",
-            "primary":   ["Cascade aeration", "Diffused air aeration"],
-            "secondary": ["Spray aeration", "Mechanical surface aerator"],
-            "notes":     "DO below 6.5 mg/L promotes anaerobic decomposition and pathogen survival. "
-                         "Target ≥ 8 mg/L.",
+        "treatments": {
+            "high_no3": "Boiling does NOT remove nitrates; use RO or distillation",
+            "high_ec": "Desalination or water exchange program",
+            "high_po4": "Chemical precipitation",
+            "high_turbidity": "Home filtration pitcher or cartridge filter",
+            "low_do": "Aerate by letting sit 24h or vigorous shaking",
         },
-    },
-    "nitrates": {
-        "too_high": {
-            "recommendation_type": "Chemical Treatment",
-            "severity_level":      "High",
-            "primary":   ["Biological denitrification", "Ion exchange (nitrate-selective resin)"],
-            "secondary": ["Reverse osmosis", "Electrodialysis"],
-            "notes":     "Nitrates above 50 mg/L risk methemoglobinaemia (blue baby syndrome). "
-                         "Investigate upstream agricultural runoff.",
-        },
-    },
-    "phosphates": {
-        "too_high": {
-            "recommendation_type": "Chemical Treatment",
-            "severity_level":      "Moderate",
-            "primary":   ["Chemical precipitation (alum or ferric chloride)", "Biological phosphate removal"],
-            "secondary": ["Membrane filtration", "Ion exchange"],
-            "notes":     "Elevated phosphates promote algal blooms (eutrophication). "
-                         "Likely source: agricultural runoff or sewage discharge.",
-        },
-    },
-    "salinity": {
-        "too_high": {
-            "recommendation_type": "Desalination",
-            "severity_level":      "Moderate",
-            "primary":   ["Reverse osmosis (RO) filtration", "Electrodialysis reversal (EDR)"],
-            "secondary": ["Nanofiltration", "Ion exchange demineralisation"],
-            "notes":     "High salinity/conductivity indicates elevated dissolved salts. "
-                         "RO is most effective when conductivity exceeds 2000 µS/cm.",
-        },
+        "monitoring": "Monthly for safety; quarterly detailed",
     },
 }
 
 
-def _check_parameter(param: str, value: float) -> dict | None:
-    # Check a single parameter against WHO/EPA limits and return a dict with violation details and treatment recommendation if out of bounds, else None.
-    if value is None or (isinstance(value, float) and np.isnan(value)):
-        return None
+def convert_salinity_to_ec(salinity_ppt):
+    """
+    Convert salinity (ppt) to electrical conductivity (µS/cm)
 
-    lim       = WHO_LIMITS[param]
-    violation = who_ref = excess_pct = None
+    Formula:
+        EC = salinity_ppt * 50
+    """
+    return salinity_ppt * 50
 
-    # pH can be too low or too high
-    if param == "ph":
-        if value < lim["min"]:
-            violation = "too_low"
-            who_ref   = lim["min"]
-            excess_pct = round((lim["min"] - value) / lim["min"] * 100, 1)
-        elif value > lim["max"]:
-            violation = "too_high"
-            who_ref   = lim["max"]
-            excess_pct = round((value - lim["max"]) / lim["max"] * 100, 1)
-        else:
-            return None
 
-    # dissolved oxygen is only too low
-    elif param == "dissolved_oxygen":
-        if value < lim["min"]:
-            violation  = "too_low"
-            who_ref    = lim["min"]
-            excess_pct = round((lim["min"] - value) / lim["min"] * 100, 1)
-        else:
-            return None
+def calculate_tds(water_data):
+    """
+    Calculate Total Dissolved Solids from EC
 
-    # The rest are standard and too high only
+    TDS (ppm) ≈ EC (µS/cm) * 0.64
+    """
+    if water_data.get("TDS") is not None:
+        return water_data["TDS"]
+
+    if water_data.get("EC") is not None:
+        return water_data["EC"] * 0.64
+
+    if water_data.get("salinity_ppt") is not None:
+        return water_data["salinity_ppt"] * 640
+
+    return None
+
+
+def estimate_treatment_cost(parameter, value, threshold):
+    """
+    Estimate treatment cost (simplified)
+    """
+    max_threshold = threshold.get("max")
+
+    if max_threshold is None:
+        return "Unknown"
+
+    deviation = abs(value - max_threshold) / max_threshold
+
+    if deviation < 0.1:
+        return "Low ($50-200)"
+    elif deviation < 0.5:
+        return "Medium ($200-500)"
     else:
-        if value > lim["max"]:
-            violation  = "too_high"
-            who_ref    = lim["max"]
-            excess_pct = round((value - lim["max"]) / lim["max"] * 100, 1)
-        else:
-            return None
+        return "High ($500+)"
 
-    # Severity from excess %
-    severity = (
-        "Critical" if excess_pct >= 200 else
-        "High"     if excess_pct >= 100 else
-        "Moderate" if excess_pct >= 25  else
-        "Low"
+
+def check_occupation_compatibility(water_data, current_occupation):
+    """
+    Check which other occupations this water is suitable for
+    """
+    compatible = []
+
+    for key, rules in OCCUPATION_RULES.items():
+
+        if key == current_occupation:
+            continue
+
+        passes = True
+
+        for param, threshold in rules["thresholds"].items():
+
+            value = (
+                calculate_tds(water_data)
+                if param == "TDS"
+                else water_data.get(param)
+            )
+
+            if value is None:
+                continue
+
+            if (
+                ("min" in threshold and value < threshold["min"]) or
+                ("max" in threshold and value > threshold["max"])
+            ):
+                passes = False
+
+        if passes:
+            compatible.append(rules["displayName"])
+
+    return compatible if compatible else ["None - requires treatment first"]
+
+
+
+def generate_recommendations(water_data, occupation):
+    """
+    Main recommendation engine
+    """
+
+    if occupation not in OCCUPATION_RULES:
+        raise ValueError(
+            f"Invalid occupation: {occupation}. "
+            f"Must be one of: {', '.join(OCCUPATION_RULES.keys())}"
+        )
+
+    rules = OCCUPATION_RULES[occupation]
+
+    ec_microsiemens = convert_salinity_to_ec(
+        water_data["salinity_ppt"]
     )
 
-    tx = TREATMENTS[param][violation]
-
-    return {
-        "param":               param,
-        "label":               lim["label"],
-        "value":               round(value, 4),
-        "who_limit":           who_ref,
-        "unit":                lim["unit"],
-        "violation":           violation,
-        "excess_pct":          excess_pct,
-        "severity":            severity,
-        "priority":            PRIORITY.get(param, 4),
-        # Columns for the recommendations table
-        "recommendation_type": tx["recommendation_type"],
-        "severity_level":      tx["severity_level"],
-        "primary":             tx["primary"],
-        "secondary":           tx.get("secondary", []),
-        "notes":               tx["notes"],
+    full_data = {
+        **water_data,
+        "EC": ec_microsiemens,
+        "salinity_ppt": water_data["salinity_ppt"],
     }
 
+    recommendation = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "occupation": rules["displayName"],
+        "occupationKey": occupation,
 
-def _build_system_plan(flags: list, risk_level: str) -> list[str]:
-    #Ordered action plan that respects treatment sequencing rules.
-    if not flags:
-        return ["✅ All parameters within WHO/EPA limits. Continue regular monitoring."]
+        "input_parameters": {
+            "pH": water_data.get("pH"),
+            "DO": water_data.get("DO"),
+            "NO3": water_data.get("NO3"),
+            "PO4": water_data.get("PO4"),
+            "salinity_ppt": water_data.get("salinity_ppt"),
+            "EC_microsiemens": ec_microsiemens,
+            "Turbidity": water_data.get("Turbidity"),
+            "ML_quality_class": water_data.get("ml_quality_class"),
+        },
 
-    plan  = []
-    step  = 1
-    names = {f["param"] for f in flags}
-
-    critical = [f for f in flags if f["severity"] == "Critical"]
-    if critical:
-        params_str = ", ".join(f["label"] for f in critical)
-        plan.append(f"Step {step}: 🚨 IMMEDIATE — Do not consume. Critical violation(s): {params_str}.")
-        step += 1
-
-    # Turbidity BEFORE disinfection
-    if "turbidity" in names:
-        f = next(f for f in flags if f["param"] == "turbidity")
-        plan.append(f"Step {step}: Install coagulation + sand filtration to reduce turbidity "
-                    f"({f['value']} NTU → <4 NTU) before any disinfection step.")
-        step += 1
-
-    # DO aeration early — improves downstream chemistry
-    if "dissolved_oxygen" in names:
-        f = next(f for f in flags if f["param"] == "dissolved_oxygen")
-        plan.append(f"Step {step}: Aerate water to raise dissolved oxygen "
-                    f"({f['value']} mg/L → ≥8 mg/L) via cascade or diffused aeration.")
-        step += 1
-
-    # Nitrates
-    if "nitrates" in names:
-        f = next(f for f in flags if f["param"] == "nitrates")
-        plan.append(f"Step {step}: Treat nitrates ({f['value']} mg/L) via biological denitrification "
-                    f"or ion exchange. Inspect for upstream agricultural sources.")
-        step += 1
-
-    # pH — before mineral treatment
-    if "ph" in names:
-        f = next(f for f in flags if f["param"] == "ph")
-        direction = "raise" if f["violation"] == "too_low" else "lower"
-        plan.append(f"Step {step}: {direction.capitalize()} pH ({f['value']}) to 7.0–7.5 range before "
-                    f"downstream mineral treatment.")
-        step += 1
-
-    # Salinity — RO handles phosphates too if co-occurring
-    if "salinity" in names:
-        f = next(f for f in flags if f["param"] == "salinity")
-        co_phos = " (will also reduce phosphates)" if "phosphates" in names else ""
-        plan.append(f"Step {step}: Install reverse osmosis to reduce salinity "
-                    f"({f['value']} µS/cm → <1500 µS/cm){co_phos}.")
-        step += 1
-
-    # Phosphates — only if salinity RO not already handling it
-    elif "phosphates" in names:
-        f = next(f for f in flags if f["param"] == "phosphates")
-        plan.append(f"Step {step}: Remove phosphates ({f['value']} mg/L) via chemical "
-                    f"precipitation (alum or ferric chloride).")
-        step += 1
-
-    plan.append(f"Step {step}: Establish regular monitoring programme "
-                f"({'monthly' if risk_level in ('High Risk','Critical Risk') else 'quarterly'} "
-                f"testing recommended for {risk_level} classification).")
-    return plan
-
-
-def generate_recommendations(
-    ph: float,
-    turbidity: float,
-    dissolved_oxygen: float,
-    nitrates: float,
-    phosphates: float,
-    salinity: float,
-    risk_level: str,
-    wqi: float,
-    health_score: float,
-) -> dict:
-    #Main function to generate recommendations based on parameter values and overall risk level. Returns dict with recommendation details and system plan.
-    params = {
-        "ph": ph, "turbidity": turbidity,
-        "dissolved_oxygen": dissolved_oxygen,
-        "nitrates": nitrates, "phosphates": phosphates,
-        "salinity": salinity,
+        "compliance_checks": {},
+        "violations": [],
+        "warnings": [],
+        "actionable_recommendations": [],
+        "overall_status": None,
+        "monitoring_frequency": rules["monitoring"],
     }
 
-    flags = []
-    safe  = []
+    parameters_to_check = [
+        "pH",
+        "DO",
+        "NO3",
+        "PO4",
+        "TDS",
+        "Turbidity",
+        "EC",
+    ]
 
-    for param, value in params.items():
-        flag = _check_parameter(param, value)
-        if flag:
-            flags.append(flag)
-        elif value is not None:
-            safe.append(WHO_LIMITS[param]["label"])
+    # ===== Compliance Checks =====
+    for param in parameters_to_check:
 
-    # Sort: priority tier → urgency severity
-    flags.sort(key=lambda f: (f["priority"], URGENCY_ORDER.get(f["severity"], 9)))
-
-    # Build recommendation_text for each flag (ready for DB insert)
-    db_recommendations = []
-    for flag in flags:
-        primary_str   = "; ".join(flag["primary"])
-        secondary_str = ("; ".join(flag["secondary"]) + ". " if flag["secondary"] else "")
-        text = (
-            f"{flag['label']} is {flag['violation'].replace('_', ' ')} at "
-            f"{flag['value']} {flag['unit']} (WHO limit: {flag['who_limit']} {flag['unit']}, "
-            f"{flag['excess_pct']:.0f}% {'above' if flag['violation']=='too_high' else 'below'} limit). "
-            f"Recommended treatment: {primary_str}. "
-            f"{secondary_str}"
-            f"{flag['notes']}"
+        value = (
+            calculate_tds(full_data)
+            if param == "TDS"
+            else full_data.get(param)
         )
-        db_recommendations.append({
-            "recommendation_text": text,
-            "recommendation_type": flag["recommendation_type"],
-            "severity_level":      flag["severity_level"],
-            "param":               flag["param"],
-            "violation":           flag["violation"],
-            "excess_pct":          flag["excess_pct"],
+
+        threshold = rules["thresholds"].get(param)
+
+        if threshold is None:
+            continue
+
+        check = {
+            "parameter": param,
+            "measured_value": value,
+            "threshold_min": threshold.get("min"),
+            "threshold_max": threshold.get("max"),
+            "status": "PASS",
+            "message": "",
+        }
+
+        # Minimum check
+        if (
+            threshold.get("min") is not None and
+            value < threshold["min"]
+        ):
+            check["status"] = "FAIL"
+            check["message"] = (
+                f"Below minimum ({value} < {threshold['min']})"
+            )
+
+            recommendation["violations"].append({
+                "parameter": param,
+                "reason": check["message"],
+                "severity": "CRITICAL",
+            })
+
+        # Maximum check
+        elif (
+            threshold.get("max") is not None and
+            value > threshold["max"]
+        ):
+            check["status"] = "FAIL"
+            check["message"] = (
+                f"Exceeds maximum ({value} > {threshold['max']})"
+            )
+
+            recommendation["violations"].append({
+                "parameter": param,
+                "reason": check["message"],
+                "severity": "CRITICAL",
+            })
+
+        # Warning checks
+        elif (
+            param == "NO3" and
+            full_data["NO3"] > 45 and
+            rules["thresholds"]["NO3"]["max"] < 45
+        ):
+            check["status"] = "WARN"
+            check["message"] = (
+                f"Approaching caution level ({value} > 45 ppm)"
+            )
+
+            recommendation["warnings"].append({
+                "parameter": param,
+                "reason": check["message"],
+            })
+
+        elif param == "Turbidity" and value > 5:
+            check["status"] = "WARN"
+            check["message"] = (
+                "Acceptable but elevated turbidity"
+            )
+
+            recommendation["warnings"].append({
+                "parameter": param,
+                "reason": check["message"],
+            })
+
+        else:
+            check["message"] = "Within acceptable range"
+
+        recommendation["compliance_checks"][param] = check
+
+    # ===== Treatment Recommendations =====
+    for violation in recommendation["violations"]:
+
+        param_lower = violation["parameter"].lower()
+
+        recommended_treatment = (
+            rules["treatments"].get(f"high_{param_lower}")
+            or rules["treatments"].get(f"low_{param_lower}")
+            or "Consult water treatment specialist"
+        )
+
+        recommendation["actionable_recommendations"].append({
+            "parameter": violation["parameter"],
+            "issue": violation["reason"],
+            "treatment": recommended_treatment,
+            "priority": (
+                "URGENT (implement within 48 hours)"
+                if violation["severity"] == "CRITICAL"
+                else "MEDIUM (within 1 week)"
+            ),
+            "cost_estimate": estimate_treatment_cost(
+                violation["parameter"],
+                full_data.get(violation["parameter"], 0),
+                rules["thresholds"][violation["parameter"]],
+            ),
         })
 
-    # Overall action message
-    n_critical = sum(1 for f in flags if f["severity"] == "Critical")
-    if n_critical > 0:
-        overall_action = (f"⛔ UNSAFE — {n_critical} critical violation(s) detected. "
-                          f"Do not consume. Immediate treatment required.")
-    elif risk_level == "Critical Risk":
-        overall_action = "⛔ Critical risk. Immediate treatment required before consumption."
-    elif risk_level == "High Risk":
-        overall_action = "🔴 Treatment required before this water is safe for consumption."
-    elif risk_level == "Moderate Risk":
-        overall_action = "🟡 Water is usable with caution. Treatment recommended."
+    # ===== Overall Status =====
+    if (
+        len(recommendation["violations"]) == 0 and
+        len(recommendation["warnings"]) == 0
+    ):
+
+        recommendation["overall_status"] = (
+            "EXCELLENT - WHO Compliant"
+        )
+
+        recommendation["actionable_recommendations"] = [{
+            "action": "Maintain current water management",
+            "description": (
+                "Water meets all WHO standards "
+                "and occupation-specific requirements"
+            ),
+            "priority": "MAINTENANCE",
+            "frequency": rules["monitoring"],
+        }]
+
+    elif len(recommendation["violations"]) == 0:
+
+        recommendation["overall_status"] = (
+            "GOOD - Minor Issues"
+        )
+
+        recommendation["actionable_recommendations"].insert(0, {
+            "action": "Monitor elevated parameters",
+            "description": (
+                f"{len(recommendation['warnings'])} parameter(s) "
+                "approaching warning threshold"
+            ),
+            "priority": "MEDIUM",
+            "frequency": "Weekly checks",
+        })
+
+    elif len(recommendation["violations"]) <= 2:
+
+        recommendation["overall_status"] = (
+            "FAIR - Treatment Needed"
+        )
+
     else:
-        overall_action = "🟢 Water quality is within safe limits. Continue regular monitoring."
+
+        recommendation["overall_status"] = (
+            "POOR - Multiple Violations, Urgent Action Required"
+        )
+
+    # ===== Compatibility Check =====
+    recommendation["suitable_for_other_occupations"] = (
+        check_occupation_compatibility(
+            full_data,
+            occupation
+        )
+    )
+
+    return recommendation
+
+
+def generate_dashboard_summary(recommendation):
+    # Dashboard-friendly summary
 
     return {
-        "overall_action":   overall_action,
-        "violations":       flags,
-        "recommendations":  db_recommendations,   # → INSERT into recommendations
-        "system_plan":      _build_system_plan(flags, risk_level),
-        "safe_parameters":  safe,
-        "n_violations":     len(flags),
+        "water_quality_grade":
+            recommendation["overall_status"].split(" - ")[0],
+
+        "occupation":
+            recommendation["occupation"],
+
+        "salinity_display":
+            f"{recommendation['input_parameters']['salinity_ppt']} ppt",
+
+        "ec_display":
+            f"{recommendation['input_parameters']['EC_microsiemens']} µS/cm",
+
+        "violations_count":
+            len(recommendation["violations"]),
+
+        "warnings_count":
+            len(recommendation["warnings"]),
+
+        "primary_actions":
+            recommendation["actionable_recommendations"][:2],
+
+        "monitoring_schedule":
+            recommendation["monitoring_frequency"],
+
+        "also_suitable_for":
+            recommendation["suitable_for_other_occupations"],
     }
