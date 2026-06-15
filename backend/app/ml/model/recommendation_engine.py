@@ -1,17 +1,31 @@
 #Water Quality Rule-Based Recommendation Engine
 #Occupation-aware with WHO compliance thresholds
+#Enhanced: parameter criticality ranking + safe treatment sequencing
 
-from datetime import datetime
+from datetime import datetime, timezone
 
-WHO_BASELINES = {
-    "pH": {"min": 6.5, "max": 8.5, "ideal": 7.0},
-    "DO": {"min": 3.0, "max": 14.0, "ideal": 8.0},  # mg/L
-    "NO3": {"max": 10.0, "warning": 50.0},  # ppm
-    "PO4": {"max": 0.1, "warning": 0.5},  # ppm
-    "TDS": {"excellent": 300, "acceptable": 500, "warning": 1000},  # ppm
-    "Turbidity": {"excellent": 1, "acceptable": 5, "warning": 10},  # NTU
-    "EC": {"safe_aquatic": 300, "caution": 500},  # µS/cm
+# Parameter weights (adapted from WHO/EPA WQI standards)
+PARAMETER_WEIGHTS = {
+    "DO":        0.25,
+    "pH":        0.22,
+    "Turbidity": 0.18,
+    "NO3":       0.15,
+    "PO4":       0.10,
+    "EC":        0.10,
+    "TDS":       0.10,  # TDS shares weight with EC (derived from it)
 }
+
+# Safe treatment sequence
+TREATMENT_SEQUENCE_ORDER = {
+    "Turbidity": 1,
+    "pH":        2,
+    "DO":        3,
+    "NO3":       4,
+    "PO4":       5,
+    "EC":        6,
+    "TDS":       6,  # TDS and EC treated together
+}
+
 
 # Occupation-specific thresholds
 OCCUPATION_RULES = {
@@ -34,6 +48,7 @@ OCCUPATION_RULES = {
             "high_turbidity": "Multi-stage filtration (sand → activated carbon → micron)",
             "low_do": "Aeration or degassing columns",
             "low_ph": "Alkali dosing (lime, soda ash)",
+            "high_ph": "Acid dosing (CO2 injection or dilute acid)",
         },
         "monitoring": "Daily + after treatment",
     },
@@ -56,6 +71,7 @@ OCCUPATION_RULES = {
             "high_po4": "Buffer crops (reed beds) or chemical treatment",
             "high_turbidity": "Settling ponds or mechanical filtration",
             "low_ph": "Lime addition before irrigation",
+            "high_ph": "Acidification (dilute sulfuric acid or acidic fertilisers)",
         },
         "monitoring": "Weekly during growing season",
     },
@@ -100,6 +116,8 @@ OCCUPATION_RULES = {
             "high_po4": "Chemical precipitation",
             "high_turbidity": "Home filtration pitcher or cartridge filter",
             "low_do": "Aerate by letting sit 24h or vigorous shaking",
+            "low_ph": "Alkali dosing or neutralisation filter (calcite cartridge)",
+            "high_ph": "CO2 injection or dilute acid neutralisation",
         },
         "monitoring": "Monthly for safety; quarterly detailed",
     },
@@ -107,12 +125,6 @@ OCCUPATION_RULES = {
 
 
 def convert_salinity_to_ec(salinity_ppt):
-    """
-    Convert salinity (ppt) to electrical conductivity (µS/cm)
-
-    Formula:
-        EC = salinity_ppt * 50
-    """
     return salinity_ppt * 50
 
 
@@ -135,9 +147,7 @@ def calculate_tds(water_data):
 
 
 def estimate_treatment_cost(parameter, value, threshold):
-    """
-    Estimate treatment cost (simplified)
-    """
+    #Treatment cost estimation based on deviation from thresholds.
     max_threshold = threshold.get("max")
 
     if max_threshold is None:
@@ -146,17 +156,15 @@ def estimate_treatment_cost(parameter, value, threshold):
     deviation = abs(value - max_threshold) / max_threshold
 
     if deviation < 0.1:
-        return "Low ($50-200)"
+        return "Low (Ksh 15,000–20,000)"
     elif deviation < 0.5:
-        return "Medium ($200-500)"
+        return "Medium (Ksh 20,000–50,000)"
     else:
-        return "High ($500+)"
+        return "High (Ksh 50,000+)"
 
 
 def check_occupation_compatibility(water_data, current_occupation):
-    """
-    Check which other occupations this water is suitable for
-    """
+    #Check if water quality meets requirements for other occupations.
     compatible = []
 
     for key, rules in OCCUPATION_RULES.items():
@@ -190,10 +198,43 @@ def check_occupation_compatibility(water_data, current_occupation):
 
 
 
+# Criticality scoring
+def compute_criticality_score(param, value, threshold, rules):
+
+    weight = PARAMETER_WEIGHTS.get(param, 0.05)
+
+    max_val = threshold.get("max")
+    min_val = threshold.get("min")
+
+    if max_val is not None and value > max_val:
+        severity = min((value - max_val) / max_val, 2.0)
+    elif min_val is not None and value < min_val:
+        severity = min((min_val - value) / min_val, 2.0)
+    else:
+        severity = 0.0
+
+    return round(weight * (1 + severity), 4)
+
+
+def rank_violations_by_criticality(violations_with_scores):
+    """
+    Sort violations by (treatment_sequence_order, criticality_score DESC).
+
+    Within the same treatment step, the most critical parameter is listed
+    first.  Across steps, the physically-mandated sequence takes precedence
+    so that treatments never interfere with each other.
+    """
+    return sorted(
+        violations_with_scores,
+        key=lambda v: (
+            TREATMENT_SEQUENCE_ORDER.get(v["parameter"], 99),
+            -v["criticality_score"],
+        ),
+    )
+
+
+# Main recommendation function
 def generate_recommendations(water_data, occupation):
-    """
-    Main recommendation engine
-    """
 
     if occupation not in OCCUPATION_RULES:
         raise ValueError(
@@ -214,7 +255,7 @@ def generate_recommendations(water_data, occupation):
     }
 
     recommendation = {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "occupation": rules["displayName"],
         "occupationKey": occupation,
 
@@ -235,6 +276,8 @@ def generate_recommendations(water_data, occupation):
         "actionable_recommendations": [],
         "overall_status": None,
         "monitoring_frequency": rules["monitoring"],
+        "parameter_criticality_ranking": [],
+        "treatment_schedule": [],
     }
 
     parameters_to_check = [
@@ -248,6 +291,8 @@ def generate_recommendations(water_data, occupation):
     ]
 
     # ===== Compliance Checks =====
+    violations_with_scores = []
+
     for param in parameters_to_check:
 
         value = (
@@ -268,6 +313,7 @@ def generate_recommendations(water_data, occupation):
             "threshold_max": threshold.get("max"),
             "status": "PASS",
             "message": "",
+            "weight": PARAMETER_WEIGHTS.get(param, 0.05),
         }
 
         # Minimum check
@@ -280,11 +326,21 @@ def generate_recommendations(water_data, occupation):
                 f"Below minimum ({value} < {threshold['min']})"
             )
 
-            recommendation["violations"].append({
+            criticality = compute_criticality_score(
+                param, value, threshold, rules
+            )
+
+            violation = {
                 "parameter": param,
                 "reason": check["message"],
-                "severity": "CRITICAL",
-            })
+                "severity": "Critical",
+                "criticality_score": criticality,
+                "weight": PARAMETER_WEIGHTS.get(param, 0.05),
+                "treatment_step": TREATMENT_SEQUENCE_ORDER.get(param, 99),
+            }
+
+            recommendation["violations"].append(violation)
+            violations_with_scores.append(violation)
 
         # Maximum check
         elif (
@@ -296,11 +352,21 @@ def generate_recommendations(water_data, occupation):
                 f"Exceeds maximum ({value} > {threshold['max']})"
             )
 
-            recommendation["violations"].append({
+            criticality = compute_criticality_score(
+                param, value, threshold, rules
+            )
+
+            violation = {
                 "parameter": param,
                 "reason": check["message"],
-                "severity": "CRITICAL",
-            })
+                "severity": "Critical",
+                "criticality_score": criticality,
+                "weight": PARAMETER_WEIGHTS.get(param, 0.05),
+                "treatment_step": TREATMENT_SEQUENCE_ORDER.get(param, 99),
+            }
+
+            recommendation["violations"].append(violation)
+            violations_with_scores.append(violation)
 
         # Warning checks
         elif (
@@ -334,32 +400,126 @@ def generate_recommendations(water_data, occupation):
 
         recommendation["compliance_checks"][param] = check
 
-    # ===== Treatment Recommendations =====
-    for violation in recommendation["violations"]:
+    criticality_ranked = sorted(
+        violations_with_scores,
+        key=lambda v: -v["criticality_score"],
+    )
 
-        param_lower = violation["parameter"].lower()
+    recommendation["parameter_criticality_ranking"] = [
+        {
+            "rank": idx + 1,
+            "parameter": v["parameter"],
+            "criticality_score": v["criticality_score"],
+            "weight": v["weight"],
+            "issue": v["reason"],
+            "note": (
+                "High health/environmental risk — weight × severity deviation"
+            ),
+        }
+        for idx, v in enumerate(criticality_ranked)
+    ]
+    
+    sequenced = rank_violations_by_criticality(violations_with_scores)
+
+    treatment_schedule = []
+    for v in sequenced:
+        step_num = v["treatment_step"]
+        param = v["parameter"]
+        param_lower = param.lower()
+
+        # Determine direction of violation for treatment key selection
+        threshold = rules["thresholds"].get(param, {})
+        direction = "high"
+        value = (
+            calculate_tds(full_data) if param == "TDS"
+            else full_data.get(param)
+        )
+        if (
+            threshold.get("min") is not None and
+            value is not None and
+            value < threshold["min"]
+        ):
+            direction = "low"
 
         recommended_treatment = (
-            rules["treatments"].get(f"high_{param_lower}")
+            rules["treatments"].get(f"{direction}_{param_lower}")
+            or rules["treatments"].get(f"high_{param_lower}")
             or rules["treatments"].get(f"low_{param_lower}")
             or "Consult water treatment specialist"
         )
 
-        recommendation["actionable_recommendations"].append({
-            "parameter": violation["parameter"],
-            "issue": violation["reason"],
+        cost = estimate_treatment_cost(
+            param,
+            full_data.get(param, 0),
+            threshold,
+        )
+
+        # Build rationale explaining WHY this step comes here in the sequence
+        step_rationale = {
+            1: (
+                "STEP 1 — Remove turbidity/solids first: suspended particles "
+                "shield pathogens from disinfection and consume chemical "
+                "reagents added in later steps, reducing their effectiveness."
+            ),
+            2: (
+                "STEP 2 — Correct pH after solids removal: pH governs "
+                "ionisation of all dissolved species and the efficiency of "
+                "every downstream chemical treatment. Wrong pH can cause "
+                "reagents to form harmful by-products."
+            ),
+            3: (
+                "STEP 3 — Aerate to restore DO after pH is stable: aerating "
+                "at the wrong pH can strip CO2 and destabilise pH; oxidised "
+                "iron/manganese from aeration must be settled/filtered before "
+                "chemical dosing."
+            ),
+            4: (
+                "STEP 4 — Remove nitrates after pH correction: ion-exchange "
+                "resins and RO membranes operate optimally at pH 6.5–8.0 and "
+                "foul rapidly if turbidity is not already resolved."
+            ),
+            5: (
+                "STEP 5 — Precipitate phosphates after nitrate treatment: "
+                "coagulants (alum, ferric chloride) require a stable pH "
+                "window and must be added before any dilution/desalination "
+                "step to avoid re-dissolving precipitates."
+            ),
+            6: (
+                "STEP 6 — Address EC/TDS/salinity last: dilution or "
+                "desalination changes ionic strength and would alter the "
+                "equilibria of all earlier chemical treatments if done "
+                "prematurely."
+            ),
+        }.get(step_num, "Consult a water treatment specialist for sequencing.")
+
+        entry = {
+            "treatment_step": step_num,
+            "parameter": param,
+            "issue": v["reason"],
+            "criticality_score": v["criticality_score"],
             "treatment": recommended_treatment,
             "priority": (
                 "URGENT (implement within 48 hours)"
-                if violation["severity"] == "CRITICAL"
+                if v["severity"] == "Critical"
                 else "MEDIUM (within 1 week)"
             ),
-            "cost_estimate": estimate_treatment_cost(
-                violation["parameter"],
-                full_data.get(violation["parameter"], 0),
-                rules["thresholds"][violation["parameter"]],
-            ),
+            "cost_estimate": cost,
+            "sequencing_rationale": step_rationale,
+        }
+
+        treatment_schedule.append(entry)
+
+        # Also add to actionable_recommendations (legacy field) for backward
+        # compatibility, preserving the sequenced order
+        recommendation["actionable_recommendations"].append({
+            "parameter": param,
+            "issue": v["reason"],
+            "treatment": recommended_treatment,
+            "priority": entry["priority"],
+            "cost_estimate": cost,
         })
+
+    recommendation["treatment_schedule"] = treatment_schedule
 
     # ===== Overall Status =====
     if (
@@ -368,7 +528,7 @@ def generate_recommendations(water_data, occupation):
     ):
 
         recommendation["overall_status"] = (
-            "EXCELLENT - WHO Compliant"
+            "Excellent - WHO Compliant"
         )
 
         recommendation["actionable_recommendations"] = [{
@@ -384,7 +544,7 @@ def generate_recommendations(water_data, occupation):
     elif len(recommendation["violations"]) == 0:
 
         recommendation["overall_status"] = (
-            "GOOD - Minor Issues"
+            "Good - Minor Issues"
         )
 
         recommendation["actionable_recommendations"].insert(0, {
@@ -400,13 +560,13 @@ def generate_recommendations(water_data, occupation):
     elif len(recommendation["violations"]) <= 2:
 
         recommendation["overall_status"] = (
-            "FAIR - Treatment Needed"
+            "Fair - Treatment Needed"
         )
 
     else:
 
         recommendation["overall_status"] = (
-            "POOR - Multiple Violations, Urgent Action Required"
+            "Poor - Multiple Violations, Urgent Action Required"
         )
 
     # ===== Compatibility Check =====
@@ -418,36 +578,3 @@ def generate_recommendations(water_data, occupation):
     )
 
     return recommendation
-
-
-def generate_dashboard_summary(recommendation):
-    # Dashboard-friendly summary
-
-    return {
-        "water_quality_grade":
-            recommendation["overall_status"].split(" - ")[0],
-
-        "occupation":
-            recommendation["occupation"],
-
-        "salinity_display":
-            f"{recommendation['input_parameters']['salinity_ppt']} ppt",
-
-        "ec_display":
-            f"{recommendation['input_parameters']['EC_microsiemens']} µS/cm",
-
-        "violations_count":
-            len(recommendation["violations"]),
-
-        "warnings_count":
-            len(recommendation["warnings"]),
-
-        "primary_actions":
-            recommendation["actionable_recommendations"][:2],
-
-        "monitoring_schedule":
-            recommendation["monitoring_frequency"],
-
-        "also_suitable_for":
-            recommendation["suitable_for_other_occupations"],
-    }

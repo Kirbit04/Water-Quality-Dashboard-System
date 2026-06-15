@@ -7,7 +7,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 // Function to download recommendations and scores
-const generatePDFReport = async (healthScore, wqiScore, recommendations, testDate, trendChartRef, paramChartRef, kpis) => {
+const generatePDFReport = async (healthScore, wqiScore, recommendations, testDate, trendChartRef, paramChartRef, kpis, user) => {
   try {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -20,6 +20,16 @@ const generatePDFReport = async (healthScore, wqiScore, recommendations, testDat
     doc.setFontSize(20);
     doc.setTextColor(10, 185, 129);
     doc.text('AQUALITCS - WATER QUALITY REPORT', margin, yPosition);
+    yPosition += 10;
+
+    //User info (name, phone and email)
+    doc.setFontSize(12);
+    doc.setTextColor(31, 41, 55);
+    doc.text('Full Name: ' + (user.name || 'Not provided'), margin, yPosition);
+    yPosition += 6;
+    doc.text('Email: ' + (user.email || 'Not provided'), margin, yPosition);
+    yPosition += 6;
+    doc.text('Phone: ' + (user.phone || 'Not provided'), margin, yPosition);
     yPosition += 10;
 
     // Date
@@ -186,7 +196,7 @@ const generatePDFReport = async (healthScore, wqiScore, recommendations, testDat
     }
 
     // Download
-    const fileName = `AquaGuard_Report_${dateStr.replace(/\s+/g, '_')}.pdf`;
+    const fileName = `AquaGuard_Report_${user?.name || 'User'}_${dateStr.replace(/\s+/g, '_')}.pdf`;
     doc.save(fileName);
   } catch (error) {
     console.error('Error generating PDF:', error);
@@ -210,7 +220,7 @@ const getStatus = (param, value) => {
     case 'phosphates':
       return v <= 0.1 ? 'Good' : v <= 0.5 ? 'Moderate' : 'Critical';
     case 'salinity':
-      return v <= 35 ? 'Good' : v <= 50 ? 'Moderate' : 'Critical';
+      return v <= 0.5 ? 'Good' : v <= 1.5 ? 'Moderate' : 'Critical';
     default:
       return 'Unknown';
   }
@@ -244,7 +254,7 @@ const StatusBadge = ({ status }) => {
     High:  'badge-critical',
   };
   return (
-    <span className={'kpi-badge ' + (statusColors[status] || 'badge-moderate')}>
+    <span className={'kpi-badge ' + (statusColors[status] || 'badge-critical')}>
       {status}
     </span>
   );
@@ -273,6 +283,9 @@ const ErrorBanner = ({ message }) => (
 const NoDataBanner = () => (
   <div style={{ textAlign: 'center', padding: '60px 24px', color: '#6b7280' }}>
     <p style={{ fontSize: '18px', marginBottom: '16px' }}>No lab tests found.</p>
+    <button className="welcome-button" onClick={() => onNavigate('labtest')}>
+      Upload Your First Lab Test
+    </button>
   </div>
 );
 
@@ -535,9 +548,12 @@ export default function Dashboard({ user, onNavigate }) {
             const results = await labTestAPI.getResults(test.id);
             
             if (results && results.health_score !== undefined && results.wqi_score !== undefined) {
-              const dateStr = new Date(test.date_of_test || test.created_at).toLocaleDateString('en-US', {
+              const dateStr = new Date(test.created_at).toLocaleString('en-KE', {
                 month: 'short',
-                day: 'numeric'
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
               });
 
               trendPoints.push({
@@ -562,9 +578,11 @@ export default function Dashboard({ user, onNavigate }) {
               const results = await labTestAPI.getResults(test.id);
               
               if (results && results.health_score !== undefined && results.wqi_score !== undefined) {
-                const dateStr = new Date(test.date_of_test || test.created_at).toLocaleDateString('en-US', {
+                const dateStr = new Date(test.created_at).toLocaleString('en-KE', {
                   month: 'short',
-                  day: 'numeric'
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
                 });
 
                 trendPoints.push({
@@ -729,8 +747,8 @@ export default function Dashboard({ user, onNavigate }) {
                 <div className="recommendations-section">
                   <h3 className="section-title">Actionable Recommendations</h3>
                   <ul className="recommendations-list">
-                    {recommendations.map((rec) => (
-                      <li key={rec.id} className="recommendation-item">
+                    {recommendations.map((rec, index) => (
+                      <li key={rec.id ?? index} className="recommendation-item">
                         <div style={{ display: 'flex', justifyContent: 'space-between',
                                       alignItems: 'center', marginBottom: '4px' }}>
                           <h4 className="recommendations-title">{rec.recommendation_type}</h4>
@@ -751,7 +769,8 @@ export default function Dashboard({ user, onNavigate }) {
                         testDate,
                         trendChartRef,
                         paramChartRef,
-                        kpis
+                        kpis,
+                        user
                       )}
                       style={{
                         padding: '12px 28px',
@@ -767,8 +786,8 @@ export default function Dashboard({ user, onNavigate }) {
                         gap: '8px',
                         transition: 'background-color 0.2s'
                       }}
-                      onMouseEnter={(e) => e.target.style.backgroundColor = '#059669'}
-                      onMouseLeave={(e) => e.target.style.backgroundColor = '#10b981'}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#059669'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#10b981'}
                     >
                       Download Report
                     </button>

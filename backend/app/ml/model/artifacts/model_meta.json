@@ -1,4 +1,5 @@
 {
+  "model_type": "SemiSupervised_LabelPropagation_RandomForest",
   "features": [
     "ph",
     "turbidity",
@@ -13,16 +14,24 @@
     "2": "Moderate Risk"
   },
   "feature_importances": {
-    "ph": 0.1571920081099235,
+    "ph": 0.2324382704489655,
     "turbidity": 0.0,
-    "dissolved_oxygen": 0.22381909941525216,
-    "nitrates": 0.13025034820362397,
-    "phosphates": 0.3428588693969427,
-    "salinity": 0.14587967487425768
+    "dissolved_oxygen": 0.34304328762101255,
+    "nitrates": 0.12688325403495565,
+    "phosphates": 0.1531034948730473,
+    "salinity": 0.1445316930220191
   },
-  "cv_accuracy": 0.8788306451612904,
-  "cv_std": 0.05431737485591781,
-  "n_samples": 157,
+  "semi_supervised": {
+    "labelled_fraction": 0.3,
+    "labelled_count": 47,
+    "unlabelled_count": 110,
+    "augmented_count": 134,
+    "confidence_threshold": 0.8,
+    "algorithm": "Label Spreading"
+  },
+  "baseline_accuracy": 0.7443181818181819,
+  "semi_accuracy": 0.8727272727272727,
+  "n_samples_total": 157,
   "who_limits": {
     "ph": 8.5,
     "turbidity": 4.0,
@@ -31,5 +40,5 @@
     "phosphates": 0.1,
     "salinity": 1500
   },
-  "turbidity_note": "Turbidity is accepted from frontend at inference but set to 0.0 during training (not in dataset)."
+  "turbidity_note": "Turbidity set to 0.0 during training (not in dataset). Real reading supplied at inference from frontend."
 }

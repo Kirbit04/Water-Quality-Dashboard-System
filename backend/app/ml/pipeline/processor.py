@@ -23,9 +23,10 @@ class WaterQualityProcessor:
 
     def __init__(self):
         self.log = logging.getLogger(self.__class__.__name__)
-        self._model   = joblib.load(MODEL_DIR / "model.pkl")
-        self._imputer = joblib.load(MODEL_DIR / "imputer.pkl")
-        self._encoder = joblib.load(MODEL_DIR / "label_encoder.pkl")
+        self._model   = joblib.load(MODEL_DIR / "model1.pkl")
+        self._imputer = joblib.load(MODEL_DIR / "imputer1.pkl")
+        self._scaler  = joblib.load(MODEL_DIR / "scaler1.pkl")
+        self._encoder = joblib.load(MODEL_DIR / "label_encoder1.pkl")
         self.log.info("WaterQualityProcessor initialised — artifacts loaded.")
 
     # Database operations 
@@ -117,23 +118,9 @@ class WaterQualityProcessor:
             "salinity":         float(imputed[5]),
         }
 
-    # ===== PPT to EC CONVERSION =====
-    # VISIBLE CONVERSION: Converting user-input salinity from PPT (Parts Per Thousand)
-    # to EC (Electrical Conductivity in µS/cm) for ML model training
-    # Formula: EC (µS/cm) = PPT × 50
-    # This conversion is applied because the ML model was trained on EC values,
-    # while users input salinity in PPT (more intuitive for water quality monitoring)
-    # ================================
+    # converting ppt to ec for ml model (since model was trained on EC-based salinity, but frontend sends PPT-based salinity)
     def _convert_ppt_to_ec(self, cleaned: dict) -> dict:
-        """
-        Convert salinity from PPT (Parts Per Thousand) to EC (Electrical Conductivity µS/cm).
-        
-        Input salinity (cleaned data) is in PPT.
-        Output salinity is converted to EC for ML model.
-        
-        Conversion formula: EC (µS/cm) = PPT × 50
-        This approximation works well for most freshwater and brackish water scenarios.
-        """
+
         ppt_value = cleaned["salinity"]
         
         # Apply PPT to EC conversion
@@ -150,8 +137,9 @@ class WaterQualityProcessor:
 
     def _ml_predict(self, cleaned: dict) -> tuple[str, float]:
         x        = np.array([[cleaned[f] for f in self.FEATURES]])
-        label_id = int(self._model.predict(x)[0])
-        proba    = self._model.predict_proba(x)[0]
+        x_scaled = self._scaler.transform(x)
+        label_id = int(self._model.predict(x_scaled)[0])
+        proba    = self._model.predict_proba(x_scaled)[0]
         label    = self._encoder.inverse_transform([label_id])[0]
         conf     = round(float(proba[label_id]) * 100, 1)
         return label, conf
@@ -252,23 +240,68 @@ class WaterQualityProcessor:
         # Step 5 — Write to DB
         # Format recommendations for database insertion
         db_recommendations = []
-        for violation in rec_output["violations"]:
-            for action in rec_output["actionable_recommendations"]:
-                if action.get("parameter") == violation["parameter"]:
-                    text = (
-                        f"{violation['parameter']} violation: {violation['reason']}. "
-                        f"Recommended treatment: {action.get('treatment', 'N/A')}. "
-                        f"Priority: {action.get('priority', 'N/A')}"
-                    )
-                    db_recommendations.append({
-                        "recommendation_text": text,
-                        "recommendation_type": "Treatment",
-                        "severity_level": violation["severity"],
-                    })
-                    break
-        
-        if not db_recommendations:
-            # Add overall status as recommendation if no violations
+        if rec_output["treatment_schedule"]:
+            from collections import defaultdict
+
+            # Populate steps_grouped first
+            steps_grouped = defaultdict(list)
+            for t in rec_output["treatment_schedule"]:
+                steps_grouped[t["treatment_step"]].append(t)
+
+            WAIT_TIMES = {
+                1: "Wait 2–4 hours for solids to fully settle before proceeding.",
+                2: "Wait 30–60 minutes after pH adjustment and retest pH before continuing.",
+                3: "Wait 1–2 hours after aeration, then retest dissolved oxygen levels.",
+                4: "Wait 24 hours after nitrate treatment and retest before proceeding.",
+                5: "Wait 4–6 hours for phosphate precipitates to fully form and settle.",
+                6: None,
+            }
+
+            sorted_step_nums = sorted(steps_grouped.keys())
+            total_steps = len(sorted_step_nums)
+
+            for display_num, step_num in enumerate(sorted_step_nums, start=1):
+                treatments = steps_grouped[step_num]
+                is_last_step = (display_num == total_steps)
+
+                param_names = [t["parameter"] for t in treatments]
+                param_str = " and ".join(param_names)
+                treatment_methods = "; ".join([t["treatment"] for t in treatments])
+
+                max_criticality = max(t["criticality_score"] for t in treatments)
+                severity = (
+                    "Critical" if max_criticality >= 0.25
+                    else "High" if max_criticality >= 0.15
+                    else "Moderate"
+                )
+
+                costs = [t["cost_estimate"] for t in treatments]
+                cost_str = costs[0] if len(costs) == 1 else f"Combined: {costs[0]} – {costs[-1]}"
+
+                wait_instruction = WAIT_TIMES.get(step_num)
+                wait_str = (
+                    f" {wait_instruction}"
+                    if wait_instruction and not is_last_step
+                    else ""
+                )
+
+                # display_num used in label — never exceeds total_steps
+                step_label = f"Step {display_num} of {total_steps}"
+
+                text = (
+                    f"[{step_label}]{param_str}. "
+                    f"{treatment_methods}."
+                    f"{wait_str} "
+                    f"Estimated cost: {cost_str}."
+                )
+
+                db_recommendations.append({
+                    "recommendation_text": text,
+                    "recommendation_type": f"Treatment — Step {display_num}",
+                    "severity_level": severity
+                })
+
+        else:
             db_recommendations.append({
                 "recommendation_text": rec_output["overall_status"],
                 "recommendation_type": "Status",
