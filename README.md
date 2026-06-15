@@ -45,7 +45,7 @@ aqualitcs/
 
 ```bash
 git clone https://github.com/your-username/aqualitcs.git
-cd aqualitcs
+cd Water Quality Dashboard System
 ```
 
 ### 2. Backend Setup
@@ -85,7 +85,7 @@ Configure your database — open `app/core/settings.py` and update the following
 DB_HOST = "localhost"
 DB_USER = "your_mysql_username"
 DB_PASSWORD = "your_mysql_password"
-DB_NAME = "aqualitcs"
+DB_NAME = "aquaguard"
 ```
 
 ### 3. Frontend Setup
@@ -111,7 +111,7 @@ npm install
 From the `backend/` directory with `aquavenv` activated:
 
 ```bash
-uvicorn main:app --reload
+uvicorn main:app --host 0.0.0.0 --port 8000--reload
 ```
 
 The API will be available at `http://localhost:8000`
