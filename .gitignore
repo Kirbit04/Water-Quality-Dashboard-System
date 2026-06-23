@@ -31,3 +31,7 @@ __pycache__/
 .Python
 *.egg-info/
 .DS_Store
+
+#ignoring env
+.env
+.env.*

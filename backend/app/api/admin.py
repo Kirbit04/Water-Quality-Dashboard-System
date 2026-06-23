@@ -81,7 +81,7 @@ class AdminRouter:
     #getting stats for admin dashboard overview
 
     async def get_stats(self):
-        """Aggregate counts for the admin dashboard overview."""
+        #Aggregate counts for the admin dashboard overview.
         db = get_db_instance()
 
         total_users = self._users.count()
